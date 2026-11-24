@@ -2,6 +2,10 @@
 
 English | [简体中文](README.zh-CN.md)
 
+**[Try the browser demo](https://jaaasonho.github.io/Araneae/)** — no installation required. The demo runs inside your browser tab; desktop overlays and cross-display movement require the macOS app.
+
+![Araneae browser demo showing the spider and behavior controls on a light background](docs/images/browser-demo.jpg)
+
 A spider desktop companion that walks, watches, and dashes across your screen. Built with **Tauri 2 + Three.js**, its body, eight legs, eyes, and fine hairs are generated in code, with no external models required.
 
 The desktop companion currently targets **macOS 12 and later**. The current build has been verified on an Apple Silicon Mac; desktop support on Intel Macs, Windows, and Linux has not been verified. The project also includes a standalone browser version.
@@ -15,6 +19,16 @@ The desktop companion currently targets **macOS 12 and later**. The current buil
 - An option to restrict patrol, following, and manual commands to the current display.
 - Adjustable speed and size, plus pause and hide controls. Continuous rendering stops while paused or hidden.
 - No internet connection required at runtime. Three.js is bundled with the source.
+
+## App Size and Resource Usage
+
+The local **macOS arm64 app bundle is approximately 8.9 MiB** (9,327,831 bytes, measured on November 24, 2026). This is the sum of file sizes inside `Araneae.app`, not its runtime memory usage or a published ZIP/DMG download size. Build options, architecture, and future changes may affect the size.
+
+The animated 3D companion uses CPU, GPU, and memory while active. A small app bundle does not imply negligible runtime cost:
+
+- When checking resource usage, include the main app and its WebKit WebContent, graphics/media, and networking processes.
+- Usage varies with behavior mode, display configuration, scaling, and hardware. Earlier short measurements do not establish a benchmark for the current version; no fixed CPU or memory target is claimed.
+- Pause or hide the companion to stop continuous rendering. This reduces ongoing rendering work but does not quit the app or release all of its memory.
 
 ## Using the Desktop Companion
 
