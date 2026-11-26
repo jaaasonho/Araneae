@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-**[在线体验网页版](https://jaaasonho.github.io/Araneae/)** — 无需安装。演示在浏览器标签页内运行；桌面悬浮和跨屏移动需要 macOS App。
+**[在线体验网页版](https://jaaasonho.github.io/Araneae/)** — 无需安装。演示在浏览器标签页内运行；桌面悬浮和跨屏移动需要桌宠 App。
 
 ![Araneae 网页版演示：浅色背景上的蜘蛛与行为控制面板](docs/images/browser-demo.jpg)
 
@@ -12,7 +12,7 @@ macOS 桌宠可以悬浮在其他应用上方，下面是它在 Google 翻译页
 
 一个在屏幕上散步、观察和冲刺的蜘蛛桌宠。使用 **Tauri 2 + Three.js**，身体、八条腿、眼睛和细毛由代码生成，无需外部模型。
 
-桌宠目前面向 **macOS 12 及以上版本**，当前构建在 Apple Silicon Mac 上验证过；Intel Mac、Windows 和 Linux 桌宠尚未验证。项目同时保留可在浏览器中独立运行的网页版。
+桌宠目前面向 **macOS 12 及以上版本**，当前构建在 Apple Silicon Mac 上验证过；Intel Mac 和 Linux 桌宠尚未验证。**Windows 10/11 x64 正在实验性适配，尚待 Windows 真机测试。**项目同时保留可在浏览器中独立运行的网页版。
 
 ## 特点
 
@@ -30,7 +30,7 @@ macOS 桌宠可以悬浮在其他应用上方，下面是它在 Google 翻译页
 
 三维桌宠在活动时会持续使用 CPU、GPU 和内存，安装包小并不意味着运行开销可以忽略：
 
-- 查看资源占用时，需要包含主进程及关联的 WebKit 网页内容、图形/媒体和网络进程。
+- 查看资源占用时，需要包含主进程及关联进程：macOS 为 WebKit 辅助进程，Windows 为对应的 `msedgewebview2.exe` 进程。上面的 macOS App 体积不代表 Windows 安装包大小。
 - 占用会随行为模式、显示器配置、缩放及硬件变化。此前的短时测量不能作为当前版本的性能基准，项目暂不承诺固定的 CPU 或内存指标。
 - 暂停或隐藏可停止持续绘制、减少渲染工作，但不会退出应用或释放全部内存。
 
@@ -43,8 +43,8 @@ macOS 桌宠可以悬浮在其他应用上方，下面是它在 Google 翻译页
 | 操作 | 效果 |
 | --- | --- |
 | 菜单栏或面板选择行为模式 | 自主巡逻、跟随鼠标或原地观察 |
-| ⌘ Command + 单击 | 临时以最高 3× 速度冲刺前往；再次点击可改换目的地 |
-| 关闭「允许跨屏」 | 留在蜘蛛当前所在屏幕，忽略其他屏幕的 Command + 单击 |
+| macOS：⌘ Command + 单击；Windows：Ctrl + 单击 | 临时以最高 3× 速度冲刺前往；再次点击可改换目的地 |
+| 关闭「允许跨屏」 | 留在蜘蛛当前所在屏幕，忽略其他屏幕的手动指令 |
 | 暂停 / 隐藏 | 停止持续绘制，并忽略移动指令 |
 | 在控制面板内按空格 | 暂停 / 继续 |
 
@@ -61,9 +61,17 @@ macOS 桌宠可以悬浮在其他应用上方，下面是它在 Google 翻译页
 - 锁屏和系统保护界面不保证覆盖。全屏及多屏表现仍可能受系统版本和显示器配置影响。
 - 当前构建使用本地临时签名，未进行 Apple 公证，其他 Mac 可能遇到系统安全提示。
 
+### Windows（实验性）
+
+Windows 启动后在系统托盘显示小眼睛图标（可能收在「隐藏的图标」中），从这里打开「控制面板」。蜘蛛不占用任务栏，也不自动打开面板。用 **Ctrl + 单击**冲刺前往，普通点击穿透；行为模式、体型、速度、暂停、隐藏和允许跨屏设置与 macOS 一致。
+
+屏幕排列遵循 Windows「设置 → 系统 → 屏幕」。所有屏幕和鼠标坐标按主屏缩放比例统一换算，避免不同 DPI 屏幕之间出现坐标缝隙。目的地避开任务栏工作区。跨屏时保持物理像素大小，因此不同像素密度屏幕上的视觉大小可能不同。
+
+透明悬浮、混合缩放跨屏、显示器拔插、托盘操作和无边框全屏覆盖仍需 Windows 真机验证。不支持独占全屏游戏、UAC 安全桌面、锁屏等受保护界面。Ctrl + 单击仍传给原应用，可能同时触发该应用自己的快捷操作。
+
 ### 鼠标事件与隐私
 
-macOS 桌宠通过全局鼠标事件监听器识别其他应用中的 Command + 单击，仅处理左键按下、抬起和拖动，以及这些鼠标事件携带的 Command 状态；不监听其他应用的键盘输入，不吞掉鼠标事件。当前代码没有加入遥测、账号登录或数据上传功能。
+macOS 桌宠通过全局鼠标事件监听器识别其他应用中的 Command + 单击，仅处理左键按下、抬起和拖动，以及这些鼠标事件携带的 Command 状态；不监听其他应用的键盘输入，不吞掉鼠标事件。Windows 通过被动的底层鼠标钩子识别 Ctrl + 单击，过滤拖动和 Araneae 自身窗口内的点击；仅在鼠标事件中查询 Ctrl 状态，不安装键盘钩子，始终放行鼠标事件。当前代码没有加入遥测、账号登录或数据上传功能。
 
 ## 从源码运行
 
@@ -79,7 +87,7 @@ npm run dev
 
 端口冲突时，macOS / Linux 可运行 `PORT=4174 npm run dev`；PowerShell 可运行 `$env:PORT=4174; npm run dev`。
 
-网页版的操作与桌宠不同：**单击前往、双击冲刺、空格暂停**，并保留深浅背景和全屏控件，界面仍为简体中文。跨屏、Command + 单击及自动选择界面语言属于 macOS 桌宠功能。
+网页版的操作与桌宠不同：**单击前往、双击冲刺、空格暂停**，并保留深浅背景和全屏控件，界面仍为简体中文。跨屏、Command + 单击及自动选择界面语言属于桌宠功能（Windows 使用 Ctrl + 单击）。
 
 ### macOS 桌宠
 
@@ -106,6 +114,22 @@ src-tauri/target/release/bundle/macos/Araneae.app
 ```
 
 缓存完整时可使用 `CARGO_NET_OFFLINE=true npm run desktop:build`。当前构建配置不执行 Apple 公证，也没有自动更新功能。
+
+### Windows 桌宠（x64）
+
+在 Windows 10/11 x64 上构建，需要 Node.js 18+、当前稳定版 Rust（MSVC 工具链）、[Microsoft C++ Build Tools 的「使用 C++ 的桌面开发」组件及 WebView2](https://v2.tauri.app/start/prerequisites/#windows)。无需安装前端依赖。
+
+```powershell
+cargo install tauri-cli --version 2.10.1 --locked
+npm run desktop:dev
+npm run desktop:build:windows
+```
+
+安装包输出到 `src-tauri/target/release/bundle/nsis/*-setup.exe`，按当前用户安装。WebView2 缺失或过旧时，安装阶段需要联网下载或更新；应用后续运行无需联网。当前未配置 Windows 代码签名证书。
+
+GitHub Actions 中的 **Windows build** 工作流会执行 Windows 检查，并上传 `Araneae-windows-x64` 安装包构建产物，保留 14 天。可手动启动，也会在推送当前分支或提出 PR 时运行；不会创建 Release。本次本地改动尚未运行该工作流，目前不提供已验证的 Windows 安装包。
+
+Windows 实现取舍及验证范围见 [Windows 适配说明（英文）](docs/windows-support.md)。
 
 ## 开发与检查
 
@@ -139,7 +163,7 @@ npm run test:patrol
 npm run test:sprint
 ```
 
-macOS 原生与桌面检查：
+原生与桌面检查：
 
 ```bash
 npm run desktop:check

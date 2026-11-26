@@ -20,6 +20,14 @@ impl Language {
                 }
             }
         }
+        #[cfg(target_os = "windows")]
+        {
+            // Use the display language, not the user's regional date/number format.
+            let language = unsafe { windows_sys::Win32::Globalization::GetUserDefaultUILanguage() };
+            if language & 0x03ff == 0x0004 {
+                return Self::SimplifiedChinese;
+            }
+        }
         Self::English
     }
 

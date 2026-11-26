@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(any(target_os = "windows", test))]
+mod click;
 mod desktop;
 mod interaction;
 mod language;
@@ -103,7 +105,8 @@ fn pet_ready(window: WebviewWindow, app: tauri::AppHandle, renderer: String) -> 
 #[tauri::command]
 fn cursor_position(window: WebviewWindow, app: tauri::AppHandle) -> DesktopResult<desktop::Point> {
     authorize_pet(&window)?;
-    desktop::cursor(cached_layout(&app)?.primary_top)
+    let layout = cached_layout(&app)?;
+    desktop::cursor(layout.primary_top, layout.coordinate_scale)
 }
 
 fn authorize_pet(window: &WebviewWindow) -> DesktopResult<()> {
@@ -202,7 +205,7 @@ fn place_viewport(
         return Err("Pet coordinates must be finite".into());
     }
     let layout = cached_layout(&app)?;
-    let actual = desktop::place(&window, bounds, layout.primary_top)?;
+    let actual = desktop::place(&window, bounds, layout.primary_top, layout.coordinate_scale)?;
     let screen = layout
         .screens
         .iter()
@@ -276,7 +279,8 @@ fn move_to_cursor_screen(window: WebviewWindow, app: tauri::AppHandle) -> Deskto
 }
 
 fn relocate(app: &tauri::AppHandle) -> DesktopResult<()> {
-    let point = desktop::cursor(cached_layout(app)?.primary_top)?;
+    let layout = cached_layout(app)?;
+    let point = desktop::cursor(layout.primary_top, layout.coordinate_scale)?;
     update(app, Command::Mode(Mode::Roam))?;
     app.emit_to("pet", "pet-relocate", point)
         .map_err(|e| e.to_string())
@@ -327,7 +331,7 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             44,
             44,
         ))
-        .icon_as_template(true)
+        .icon_as_template(cfg!(target_os = "macos"))
         .tooltip(language.text("Araneae · Control Panel", "Araneae · 控制面板"))
         .menu(&menu)
         .show_menu_on_left_click(true)

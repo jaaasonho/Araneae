@@ -50,6 +50,7 @@ pub struct Screen {
 pub struct Layout {
     pub screens: Vec<Screen>,
     pub viewport: Rect,
+    pub coordinate_scale: f64,
     #[serde(skip)]
     pub primary_top: f64,
 }
@@ -103,10 +104,11 @@ mod platform {
             screens,
             viewport: top_left(native.frame(), top),
             primary_top: top,
+            coordinate_scale: 1.0,
         })
     }
 
-    pub fn cursor(top: f64) -> Result<Point, String> {
+    pub fn cursor(top: f64, _scale: f64) -> Result<Point, String> {
         let point = NSEvent::mouseLocation();
         Ok(Point {
             x: point.x,
@@ -114,7 +116,12 @@ mod platform {
         })
     }
 
-    pub fn place(window: &WebviewWindow, bounds: Rect, top: f64) -> Result<Rect, String> {
+    pub fn place(
+        window: &WebviewWindow,
+        bounds: Rect,
+        top: f64,
+        _scale: f64,
+    ) -> Result<Rect, String> {
         bounds.validate()?;
         let pointer = window.ns_window().map_err(|e| e.to_string())?;
         let native = unsafe { &*pointer.cast::<NSWindow>() };
@@ -137,7 +144,7 @@ mod platform {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod platform {
     use super::*;
 
@@ -145,11 +152,16 @@ mod platform {
         Err("Automatic cross-screen geometry is currently supported on macOS only".into())
     }
 
-    pub fn cursor(_top: f64) -> Result<Point, String> {
+    pub fn cursor(_top: f64, _scale: f64) -> Result<Point, String> {
         Err("Global logical cursor coordinates are currently supported on macOS only".into())
     }
 
-    pub fn place(_window: &WebviewWindow, _bounds: Rect, _top: f64) -> Result<Rect, String> {
+    pub fn place(
+        _window: &WebviewWindow,
+        _bounds: Rect,
+        _top: f64,
+        _scale: f64,
+    ) -> Result<Rect, String> {
         Err("Automatic cross-screen positioning is currently supported on macOS only".into())
     }
 
@@ -159,6 +171,10 @@ mod platform {
             .map_err(|e| e.to_string())
     }
 }
+
+#[cfg(target_os = "windows")]
+#[path = "desktop_windows.rs"]
+mod platform;
 
 pub use platform::{cursor, layout, place, set_level};
 

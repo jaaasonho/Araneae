@@ -13,7 +13,7 @@ const {listen} = window.__TAURI__.event;
 let settings, page, spider, screens, bounds, behavior, viewport, clock, measureContent;
 let stopped = false, placing = false, readingCursor = false, readingLayout = false;
 let resetCrop = true, styledViewport = null;
-let lastPlaced = null, topology = '';
+let lastPlaced = null, topology = '', coordinateScale = 1;
 const cleanup = [];
 let strings = desktopStrings();
 const raycaster = new THREE.Raycaster();
@@ -54,7 +54,7 @@ function recoverPosition(point) {
 
 function apply(next) {
   if (!settings || settings.language !== next.language) {
-    strings = localizeDesktop(document, next.language);
+    strings = localizeDesktop(document, next.language, next.platform);
     frame.title = strings.petArea;
   }
   const crossingChanged = settings && settings.allowCrossScreen !== next.allowCrossScreen;
@@ -85,7 +85,8 @@ async function readLayout() {
   readingLayout = true;
   try {
     const snapshot = await invoke('desktop_layout');
-    const key = JSON.stringify(snapshot.screens);
+    coordinateScale = snapshot.coordinateScale ?? 1;
+    const key = JSON.stringify([snapshot.screens, coordinateScale]);
     if (key === topology) return;
     const previousPoint = spider ? globalPoint() : null;
     topology = key;
@@ -178,12 +179,16 @@ function attachRenderer() {
   if (renderer.isWebGLRenderer) measureContent = createContentBounds(spider.scene, spider.camera);
   const originalRender = renderer.render.bind(renderer);
   renderer.render = (scene, camera) => {
+    // Windows uses one desktop-wide logical scale. Compensate for per-window
+    // WebView2 DPI when the crop crosses displays; controls retain native scaling.
+    const density = settings.platform === 'windows' ? coordinateScale : frame.contentWindow.devicePixelRatio;
+    if (settings.platform === 'windows') document.body.style.zoom = String(coordinateScale / window.devicePixelRatio);
     const point = globalPoint();
     track(point);
     if (!renderer.isWebGLRenderer) return originalRender(scene, camera);
     // Crop only the render. Physics, camera projection and all original input handlers
     // keep using the full virtual desktop and the original simulation state.
-    const ratio = Math.min(frame.contentWindow.devicePixelRatio, 2);
+    const ratio = Math.min(density, 2);
     if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio);
     const canvas = renderer.domElement;
     if (canvas.width !== Math.floor(viewport.width * ratio) || canvas.height !== Math.floor(viewport.height * ratio)) {

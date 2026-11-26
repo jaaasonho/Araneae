@@ -131,7 +131,7 @@ mod platform {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod platform {
     use crate::DesktopResult;
 
@@ -143,5 +143,9 @@ mod platform {
         Ok(())
     }
 }
+
+#[cfg(target_os = "windows")]
+#[path = "interaction_windows.rs"]
+mod platform;
 
 pub use platform::{start, stop};
