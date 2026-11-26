@@ -6,9 +6,6 @@ on:
     paths:
       - 'dist/**'
       - '.github/workflows/static.yml'
-  pull_request:
-    paths:
-      - '.github/workflows/static.yml'
   workflow_dispatch:
 
 permissions:
@@ -39,7 +36,7 @@ jobs:
           path: './dist'
 
   deploy:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main'
     needs: upload
     runs-on: ubuntu-latest
     timeout-minutes: 15
