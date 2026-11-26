@@ -65,6 +65,20 @@ macOS 桌宠可以悬浮在其他应用上方，下面是它在 Google 翻译页
 
 桌宠通过全局被动鼠标监听识别其他应用中的冲刺点击（macOS 为 `Command + 单击`，Windows 为低级鼠标钩子识别 `Ctrl + 单击`），仅处理左键按下、抬起、拖拽越界判断以及对应修饰键状态；不监听其他应用的键盘输入，不吞掉鼠标事件。当前代码没有加入遥测、账号登录或数据上传功能。
 
+## 桌面安装包
+
+**Desktop packages** 工作流为以下平台构建 **0.0.2** 版本：
+
+| 电脑 | 安装包 |
+| --- | --- |
+| Apple Silicon Mac（M1 及更新芯片） | `Araneae_0.0.2_macos-arm64.dmg` |
+| Intel Mac | `Araneae_0.0.2_macos-x64.dmg` |
+| Windows 10/11 x64 | `Araneae_0.0.2_windows-x64-setup.exe` |
+
+正式发布前，可以从成功的 [Desktop packages Actions 运行记录](https://github.com/jaaasonho/Araneae/actions/workflows/packages.yml) 下载。登录 GitHub，选择适合自己电脑的附件，下载并解压 ZIP。macOS 打开 DMG，将 Araneae 拖入「应用程序」；Windows 运行 setup EXE。每份附件包含 `SHA256SUMS.txt`，保留 14 天。也可以点击 **Run workflow** 手动构建；工作流不会自动发布 Release 或移动已有标签。
+
+macOS 安装包使用临时签名，未进行 Apple 公证；Windows 安装包未做代码签名，可能出现系统安全提示。构建检查不能代替真实桌面测试，尤其是 Intel Mac。保留已有的 `v0.0.1` 标签，package、Tauri 和 Cargo 的版本统一为 `0.0.2`。
+
 ## 从源码运行
 
 ### 网页版
@@ -83,11 +97,11 @@ npm run dev
 
 ### macOS 桌宠
 
-需要 Node.js 18+、Rust、Xcode Command Line Tools 和 Tauri CLI 2。当前成功构建使用 Rust **1.91.1**，Rust 依赖版本由 `src-tauri/Cargo.lock` 固定。
+需要 Node.js 18+、Rust 1.88+、Xcode Command Line Tools 和 Tauri CLI 2。当前成功构建使用 Rust **1.91.1**，Rust 依赖版本由 `src-tauri/Cargo.lock` 固定。
 
 ```bash
 xcode-select --install
-cargo install tauri-cli --version '^2' --locked
+cargo install tauri-cli --version 2.10.1 --locked
 npm run desktop:dev
 ```
 
@@ -106,6 +120,8 @@ src-tauri/target/release/bundle/macos/Araneae.app
 ```
 
 缓存完整时可使用 `CARGO_NET_OFFLINE=true npm run desktop:build`。当前构建配置不执行 Apple 公证，也没有自动更新功能。
+
+在当前 Mac 上运行 `npm run desktop:build:mac` 可生成 DMG，输出位置为 `src-tauri/target/release/bundle/dmg/`。
 
 ### Windows 桌宠（x64）
 
