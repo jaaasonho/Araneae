@@ -2,14 +2,6 @@ name: Windows CI
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, codex/windows-support]
-    paths:
-      - 'src-tauri/**'
-      - 'dist/**'
-      - 'scripts/**'
-      - 'package.json'
-      - '.github/workflows/windows.yml'
   pull_request:
     paths:
       - 'src-tauri/**'
@@ -17,9 +9,14 @@ on:
       - 'scripts/**'
       - 'package.json'
       - '.github/workflows/windows.yml'
+      - '.github/workflows/packages.yml'
 
 permissions:
   contents: read
+
+concurrency:
+  group: windows-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   windows:
@@ -36,6 +33,8 @@ jobs:
         run: rustup default stable
       - name: Check JavaScript
         run: npm run check
+      - name: Test release publishing
+        run: node --test scripts/check-publish-release.mjs
       - name: Check formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - name: Test desktop coordinates, clock and cropping

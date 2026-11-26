@@ -3,28 +3,14 @@ name: Desktop packages
 on:
   workflow_dispatch:
   push:
-    branches: [main]
     tags: ['v*']
-    paths:
-      - 'src-tauri/**'
-      - 'dist/**'
-      - 'scripts/**'
-      - 'package.json'
-      - '.github/workflows/packages.yml'
-  pull_request:
-    paths:
-      - 'src-tauri/**'
-      - 'dist/**'
-      - 'scripts/**'
-      - 'package.json'
-      - '.github/workflows/packages.yml'
 
 permissions:
   contents: read
 
 concurrency:
   group: desktop-packages-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   package:
@@ -154,6 +140,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
       - name: Download installers
         uses: actions/download-artifact@v8
         with:
@@ -173,11 +165,27 @@ jobs:
             if [ "$platform" = windows-x64 ]; then suffix='-setup.exe'; fi
             name="Araneae_${version}_${platform}${suffix}"
             matches=(collected/*/"$name")
-            if [ "${#matches[@]}" -ne 1 ]; then
-              echo "Expected exactly one installer: $name" >&2
+            installer=''
+            newest=0
+            for candidate in "${matches[@]}"; do
+              artifact="${candidate%/*}"
+              attempt="${artifact##*-}"
+              if [[ ! "$attempt" =~ ^[1-9][0-9]*$ ]]; then
+                echo "Invalid artifact attempt: $artifact" >&2
+                exit 1
+              fi
+              if [ "$attempt" -gt "$newest" ]; then
+                newest="$attempt"
+                installer="$candidate"
+              elif [ "$attempt" -eq "$newest" ]; then
+                echo "Duplicate installer in attempt $attempt: $name" >&2
+                exit 1
+              fi
+            done
+            if [ -z "$installer" ]; then
+              echo "Missing installer: $name" >&2
               exit 1
             fi
-            installer="${matches[0]}"
             test -s "$installer"
             (cd "${installer%/*}" && sha256sum --check SHA256SUMS.txt)
             cp "$installer" release/
@@ -188,8 +196,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          gh release create "$RELEASE_TAG" release/* \
-            --verify-tag \
-            --title "Araneae $RELEASE_TAG" \
-            --generate-notes
+        run: node scripts/publish-release.mjs

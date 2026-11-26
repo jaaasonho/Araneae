@@ -77,7 +77,9 @@ The **Desktop packages** workflow builds version **0.0.2** for these platforms:
 
 Published installers are available on the [Releases page](https://github.com/jaaasonho/Araneae/releases). Open the DMG and drag Araneae into Applications on macOS; run the setup EXE on Windows. Development packages are also available from successful [Desktop packages Actions runs](https://github.com/jaaasonho/Araneae/actions/workflows/packages.yml): sign in, download the artifact for your computer, and extract its ZIP. These artifacts include `SHA256SUMS.txt` and are retained for 14 days.
 
-Pushing a version tag such as `v0.0.2` triggers all three builds. After every build succeeds, the workflow verifies the installers and publishes a Release with the installers and combined `SHA256SUMS.txt`. The tag must match the package version. PRs, main branch pushes, and **Run workflow** only build artifacts; they do not publish releases. Existing releases and tags are not overwritten.
+Pushing a version tag such as `v0.0.2` triggers all three builds. After every build succeeds, the workflow verifies the installers and publishes a Release with the installers and combined `SHA256SUMS.txt`. The tag must match the package version. PRs run checks without building installers; main branch pushes deploy Pages only when `dist/` or its deployment workflow changes. **Run workflow** builds artifacts without publishing a Release.
+
+Publishing reuses an existing Release, preserves its title, notes, status, and installer attachments, and adds missing installers. Reruns select the newest available artifact attempt for each platform. Checksums include the actual published installer digests; only an outdated checksum attachment is replaced. An incomplete immutable Release fails with a request for a new version tag. Existing tags are never moved.
 
 macOS packages use an ad hoc signature and are not Apple-notarized; Windows installers are unsigned. System security prompts may appear. Successful packaging checks do not replace testing on a real desktop, particularly on Intel Macs. The existing `v0.0.1` tag is retained; package, Tauri, and Cargo versions now agree on `0.0.2`.
 
