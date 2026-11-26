@@ -181,6 +181,11 @@ function updateMotion(dt){
  if(manual&&(state.mode!=='observe'||desktopManual))goal.copy(clickGoal);
  const desktopGoal=window.__spiderDesktop?.updateGoal({autonomous,manual});
  if(desktopGoal)goal.copy(desktopGoal);
+ // Give a completed desktop walk the same arrival pause as a dash, even
+ // when a slow cross-display route outlasts the original click timeout.
+ if(desktopManual&&!window.__spiderDesktop.manualActive&&!sprinting){
+  clickUntil=Math.max(clickUntil,time+1.2);
+ }
  // A desktop command temporarily permits movement without changing the
  // selected mode. Observe resumes as soon as the manual route finishes.
  const moving=state.mode!=='observe'||!!window.__spiderDesktop?.manualActive;

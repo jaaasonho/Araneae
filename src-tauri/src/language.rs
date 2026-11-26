@@ -20,6 +20,15 @@ impl Language {
                 }
             }
         }
+        #[cfg(target_os = "windows")]
+        {
+            #[link(name = "kernel32")]
+            extern "system" { fn GetUserDefaultUILanguage() -> u16; }
+            // The low ten bits of a LANGID identify its primary language.
+            if unsafe { GetUserDefaultUILanguage() } & 0x03ff == 0x04 {
+                return Self::SimplifiedChinese;
+            }
+        }
         Self::English
     }
 

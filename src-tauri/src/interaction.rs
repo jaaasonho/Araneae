@@ -131,7 +131,61 @@ mod platform {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+mod platform {
+    use crate::{desktop, DesktopResult};
+    use std::{sync::atomic::{AtomicBool, Ordering}, time::Duration};
+    use tauri::Emitter;
+
+    #[link(name = "user32")]
+    extern "system" { fn GetAsyncKeyState(key: i32) -> i16; }
+
+    static STOP: AtomicBool = AtomicBool::new(false);
+
+    #[derive(Clone, serde::Serialize)]
+    struct Destination { point: desktop::Point, fast: bool }
+
+    pub fn start(app: &tauri::AppHandle) -> DesktopResult<()> {
+        let app = app.clone();
+        std::thread::Builder::new().name("destination-click".into()).spawn(move || {
+            let mut down = false;
+            let mut start: Option<desktop::Point> = None;
+            while !STOP.load(Ordering::Relaxed) {
+                let pressed = unsafe { GetAsyncKeyState(1) } < 0;
+                let ctrl = unsafe { GetAsyncKeyState(0x11) } < 0;
+                if !ctrl {
+                    start = None;
+                } else if pressed || down {
+                    if let Ok(point) = desktop::cursor(0.0) {
+                        if pressed && !down {
+                            start = Some(point);
+                        }
+                        if start.is_some_and(|p| (p.x - point.x).hypot(p.y - point.y) > 5.0) {
+                            start = None;
+                        }
+                        if !pressed && start.take().is_some()
+                            && crate::settings(&app).is_ok_and(|s| s.visible && !s.paused)
+                            && crate::cached_layout(&app).is_ok_and(|l| l.screens.iter().any(|s| s.work_area.contains(point))) {
+                            let _ = app.emit_to("pet", "pet-destination", Destination { point, fast: true });
+                        }
+                    } else {
+                        start = None;
+                    }
+                }
+                down = pressed;
+                std::thread::sleep(Duration::from_millis(16));
+            }
+        }).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn stop() -> DesktopResult<()> {
+        STOP.store(true, Ordering::Relaxed);
+        Ok(())
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod platform {
     use crate::DesktopResult;
 

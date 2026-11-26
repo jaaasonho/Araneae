@@ -137,7 +137,66 @@ mod platform {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+mod platform {
+    use super::*;
+    use tauri::{PhysicalPosition, PhysicalSize};
+
+    #[repr(C)]
+    #[derive(Default)]
+    struct WinPoint { x: i32, y: i32 }
+
+    #[link(name = "user32")]
+    extern "system" { fn GetCursorPos(point: *mut WinPoint) -> i32; }
+
+    fn viewport(window: &WebviewWindow) -> Result<Rect, String> {
+        let pos = window.outer_position().map_err(|e| e.to_string())?;
+        let size = window.inner_size().map_err(|e| e.to_string())?;
+        Ok(Rect { x: pos.x.into(), y: pos.y.into(), width: size.width.into(), height: size.height.into() })
+    }
+
+    pub fn layout(window: &WebviewWindow) -> Result<Layout, String> {
+        let monitors = window.available_monitors().map_err(|e| e.to_string())?;
+        let screens = monitors.into_iter().map(|monitor| {
+            let pos = monitor.position();
+            let size = monitor.size();
+            let work = monitor.work_area();
+            Screen {
+                name: monitor.name().cloned().unwrap_or_default(),
+                frame: Rect { x: pos.x.into(), y: pos.y.into(), width: size.width.into(), height: size.height.into() },
+                work_area: Rect { x: work.position.x.into(), y: work.position.y.into(),
+                    width: work.size.width.into(), height: work.size.height.into() },
+                scale: monitor.scale_factor(),
+            }
+        }).collect();
+        Ok(Layout { screens, viewport: viewport(window)?, primary_top: 0.0 })
+    }
+
+    pub fn cursor(_: f64) -> Result<Point, String> {
+        let mut pos = WinPoint::default();
+        if unsafe { GetCursorPos(&mut pos) } == 0 {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+        Ok(Point { x: pos.x.into(), y: pos.y.into() })
+    }
+
+    pub fn place(window: &WebviewWindow, bounds: Rect, _: f64) -> Result<Rect, String> {
+        bounds.validate()?;
+        let position = PhysicalPosition::new(bounds.x.round() as i32, bounds.y.round() as i32);
+        window.set_position(position).map_err(|e| e.to_string())?;
+        let size = PhysicalSize::new(bounds.width.round() as u32, bounds.height.round() as u32);
+        if window.inner_size().map_err(|e| e.to_string())? != size {
+            window.set_size(size).map_err(|e| e.to_string())?;
+        }
+        viewport(window)
+    }
+
+    pub fn set_level(window: &WebviewWindow, offset: Option<isize>) -> Result<(), String> {
+        window.set_always_on_top(offset.is_some()).map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 mod platform {
     use super::*;
 

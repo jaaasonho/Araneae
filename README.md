@@ -81,6 +81,19 @@ If the port is in use, run `PORT=4174 npm run dev` on macOS / Linux, or `$env:PO
 
 Browser controls differ from the desktop companion: **click to move, double-click to dash, and Space to pause**. The browser version also retains light/dark backgrounds and fullscreen controls. Its interface remains in Simplified Chinese. Cross-display movement, Command-click commands, and automatic interface language selection belong to the macOS desktop companion.
 
+### Windows Desktop Companion
+
+Install Node.js 18+, Rust with the MSVC toolchain, Visual Studio Build Tools with Desktop development with C++, and the Microsoft Edge WebView2 Runtime.
+
+```powershell
+cargo install tauri-cli --version "^2" --locked
+npm.cmd run desktop:dev
+```
+
+`npm.cmd run desktop:build`
+
+Use Ctrl + left-click to dash. The NSIS installer is written to `src-tauri/target/release/bundle/nsis/`.
+
 ### macOS Desktop Companion
 
 Requires Node.js 18+, Rust, Xcode Command Line Tools, and Tauri CLI 2. The current successful build used Rust **1.91.1**. Rust dependency versions are pinned in `src-tauri/Cargo.lock`.

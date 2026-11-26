@@ -81,6 +81,19 @@ npm run dev
 
 网页版的操作与桌宠不同：**单击前往、双击冲刺、空格暂停**，并保留深浅背景和全屏控件，界面仍为简体中文。跨屏、Command + 单击及自动选择界面语言属于 macOS 桌宠功能。
 
+### Windows 桌面版
+
+需要 Node.js 18+、Rust MSVC 工具链、Visual Studio Build Tools（勾选「使用 C++ 的桌面开发」）以及 Microsoft Edge WebView2 运行时。
+
+```powershell
+cargo install tauri-cli --version "^2" --locked
+npm.cmd run desktop:dev
+```
+
+`npm.cmd run desktop:build`
+
+按住 Ctrl 并单击鼠标左键可指定冲刺目标。安装包输出目录为 `src-tauri/target/release/bundle/nsis/`.
+
 ### macOS 桌宠
 
 需要 Node.js 18+、Rust、Xcode Command Line Tools 和 Tauri CLI 2。当前成功构建使用 Rust **1.91.1**，Rust 依赖版本由 `src-tauri/Cargo.lock` 固定。

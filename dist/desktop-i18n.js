@@ -57,7 +57,10 @@ export const desktopMessages = {
 };
 
 export function desktopStrings(language = 'en') {
-  return desktopMessages[language] ?? desktopMessages.en;
+  const strings = desktopMessages[language] ?? desktopMessages.en;
+  if (!globalThis.navigator?.platform?.startsWith('Win')) return strings;
+  const shortcut = value => value.replace(/(?:⌘ )?Command/g, 'Ctrl');
+  return {...strings, command: shortcut(strings.command), readyStatus: shortcut(strings.readyStatus)};
 }
 
 export function localizeDesktop(document, language) {

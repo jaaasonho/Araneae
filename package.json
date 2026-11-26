@@ -17,7 +17,7 @@
     "test:patrol": "node scripts/check-patrol.mjs",
     "test:sprint": "node scripts/check-sprint.mjs",
     "desktop:dev": "cargo tauri dev",
-    "desktop:build": "cargo tauri build --bundles app -- --locked",
+    "desktop:build": "cargo tauri build -- --locked",
     "desktop:check": "cargo check --manifest-path src-tauri/Cargo.toml --locked",
     "desktop:test": "node --test scripts/check-desktop-routing.mjs scripts/check-desktop-clock.mjs scripts/check-desktop-viewport.mjs && node scripts/check-desktop-motion.mjs && cargo test --manifest-path src-tauri/Cargo.toml --locked"
   }

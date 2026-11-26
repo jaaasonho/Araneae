@@ -139,6 +139,8 @@ function installBehavior() {
 }
 
 function track(point) {
+  // Windows monitor and cursor coordinates share a physical-pixel desktop.
+  const scale = navigator.platform.startsWith('Win') ? 1 / window.devicePixelRatio : 1;
   const content = measureContent?.(bounds);
   if (measureContent) {
     viewport = chooseViewport(content, resetCrop ? null : viewport, point, settings.size);
@@ -149,17 +151,19 @@ function track(point) {
   resetCrop = false;
   const x = viewport.x - bounds.x;
   const y = viewport.y - bounds.y;
-  if (!styledViewport || viewport.x !== styledViewport.x || viewport.y !== styledViewport.y
+  if (!styledViewport || scale !== styledViewport.scale || viewport.x !== styledViewport.x || viewport.y !== styledViewport.y
     || bounds.x !== styledViewport.desktopX || bounds.y !== styledViewport.desktopY) {
-    frame.style.left = -x + 'px';
-    frame.style.top = -y + 'px';
+    frame.style.transformOrigin = 'top left';
+    frame.style.transform = `scale(${scale})`;
+    frame.style.left = -x * scale + 'px';
+    frame.style.top = -y * scale + 'px';
     if (spider.renderer.isWebGLRenderer) {
       const canvas = spider.renderer.domElement;
       canvas.style.position = 'absolute';
       canvas.style.left = x + 'px';
       canvas.style.top = y + 'px';
     }
-    styledViewport = {...viewport, desktopX: bounds.x, desktopY: bounds.y};
+    styledViewport = {...viewport, scale, desktopX: bounds.x, desktopY: bounds.y};
   }
   if (placing || (lastPlaced && distance(viewport, lastPlaced) < 1
     && viewport.width === lastPlaced.width && viewport.height === lastPlaced.height)) return;

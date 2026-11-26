@@ -264,7 +264,7 @@ fn open_window(app: &tauri::AppHandle, original: bool) -> DesktopResult<()> {
 }
 
 #[tauri::command]
-fn open_original(window: WebviewWindow, app: tauri::AppHandle) -> DesktopResult<()> {
+async fn open_original(window: WebviewWindow, app: tauri::AppHandle) -> DesktopResult<()> {
     authorize(&window)?;
     open_window(&app, true)
 }
@@ -303,6 +303,18 @@ fn menu_action(app: &tauri::AppHandle, id: &str) -> DesktopResult<()> {
     Ok(())
 }
 
+fn handle_menu(app: &tauri::AppHandle, id: &str) {
+    if let Err(error) = menu_action(app, id) {
+        eprintln!("Desktop menu action failed: {error}");
+        if let Err(open_error) = open_window(app, false) {
+            eprintln!("Could not open desktop controls: {open_error}");
+        }
+        if let Err(emit_error) = app.emit_to("controls", "desktop-error", &error) {
+            eprintln!("Could not report desktop error: {emit_error}");
+        }
+    }
+}
+
 fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let language = settings(app).map_err(std::io::Error::other)?.language;
     let item = |id, text| MenuItem::with_id(app, id, text, true, None::<&str>);
@@ -332,15 +344,15 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| {
-            if let Err(error) = menu_action(app, event.id.as_ref()) {
-                eprintln!("Desktop menu action failed: {error}");
-                if let Err(open_error) = open_window(app, false) {
-                    eprintln!("Could not open desktop controls: {open_error}");
-                }
-                if let Err(emit_error) = app.emit_to("controls", "desktop-error", &error) {
-                    eprintln!("Could not report desktop error: {emit_error}");
-                }
+            #[cfg(target_os = "windows")]
+            {
+                // Creating a WebView2 window must not block the UI event loop.
+                let app = app.clone();
+                let id = event.id.as_ref().to_owned();
+                tauri::async_runtime::spawn_blocking(move || handle_menu(&app, &id));
             }
+            #[cfg(not(target_os = "windows"))]
+            handle_menu(app, event.id.as_ref());
         })
         .build(app)?;
     Ok(())
