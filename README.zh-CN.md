@@ -77,7 +77,9 @@ macOS 桌宠可以悬浮在其他应用上方，下面是它在 Google 翻译页
 
 正式安装包可从 [Releases 页面](https://github.com/jaaasonho/Araneae/releases) 下载。macOS 打开 DMG，将 Araneae 拖入「应用程序」；Windows 运行 setup EXE。开发构建也可以从成功的 [Desktop packages Actions 运行记录](https://github.com/jaaasonho/Araneae/actions/workflows/packages.yml) 下载：登录 GitHub，选择适合自己电脑的附件，下载并解压 ZIP。这些附件包含 `SHA256SUMS.txt`，保留 14 天。
 
-推送 `v0.0.2` 这样的版本标签后，工作流会构建三个平台的安装包。全部成功后，校验安装包并自动发布 Release，附上安装包和合并的 `SHA256SUMS.txt`。标签必须与项目版本一致。PR、main 分支推送和 **Run workflow** 只构建附件，不发布 Release，也不会覆盖已有 Release 或标签。
+推送 `v0.0.2` 这样的版本标签后，工作流会构建三个平台的安装包。全部成功后，校验安装包并自动发布 Release，附上安装包和合并的 `SHA256SUMS.txt`。标签必须与项目版本一致。PR 只做检查，不构建安装包；main 分支推送仅在 `dist/` 或网页部署配置变化时部署 Pages。**Run workflow** 只构建附件，不发布 Release。
+
+发布时会复用已有 Release，保留标题、说明、发布状态及安装包，只补齐缺失的安装包。重跑时按平台选择最新可用构建次数的附件，校验文件使用实际已发布安装包的摘要，只替换过期的校验附件。若已有 Release 不可修改且附件不完整，会明确报错并要求新版本标签，不移动已有标签。
 
 macOS 安装包使用临时签名，未进行 Apple 公证；Windows 安装包未做代码签名，可能出现系统安全提示。构建检查不能代替真实桌面测试，尤其是 Intel Mac。保留已有的 `v0.0.1` 标签，package、Tauri 和 Cargo 的版本统一为 `0.0.2`。
 

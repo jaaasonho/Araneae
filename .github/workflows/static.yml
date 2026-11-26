@@ -3,6 +3,9 @@ name: Deploy static content to Pages
 on:
   push:
     branches: ["main"]
+    paths:
+      - 'dist/**'
+      - '.github/workflows/static.yml'
   pull_request:
     paths:
       - '.github/workflows/static.yml'
