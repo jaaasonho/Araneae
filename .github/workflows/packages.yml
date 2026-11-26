@@ -38,16 +38,19 @@ jobs:
             runner: macos-15
             target: aarch64-apple-darwin
             bundle: dmg
+            bundles: app,dmg
             arch: arm64
           - label: macos-x64
             runner: macos-15-intel
             target: x86_64-apple-darwin
             bundle: dmg
+            bundles: app,dmg
             arch: x86_64
           - label: windows-x64
             runner: windows-latest
             target: x86_64-pc-windows-msvc
             bundle: nsis
+            bundles: nsis
             arch: x86_64
     defaults:
       run:
@@ -90,7 +93,7 @@ jobs:
       - name: Build installer
         env:
           TAURI_BUNDLER_DMG_IGNORE_CI: 'true'
-        run: tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundle }} -- --locked
+        run: tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} -- --locked
       - name: Verify macOS app and disk image
         if: runner.os == 'macOS'
         env:
