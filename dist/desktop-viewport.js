@@ -77,3 +77,36 @@ export function chooseViewport(content, previous, anchor, size) {
   // the old surface briefly appear ahead of the new one.
   return {x: Math.round(anchor.x - width / 2), y: Math.round(anchor.y - height / 2), width, height};
 }
+
+// Compute iframe/canvas placement and Windows mixed-DPI CSS scaling for both
+// WebGL cropped rendering and 2D Canvas fallback rendering.
+export function computeViewportPlacement(viewport, bounds, baseScale, dpr, isWindows, isWebGL) {
+  const x = viewport.x - bounds.x;
+  const y = viewport.y - bounds.y;
+  const cssScale = isWindows && dpr > 0 ? baseScale / dpr : 1;
+  const scaled = Math.abs(cssScale - 1) > 1e-3;
+  const cssWidth = Math.max(1, Math.round(viewport.width * cssScale));
+  const cssHeight = Math.max(1, Math.round(viewport.height * cssScale));
+  if (isWebGL) {
+    return {
+      cssScale,
+      frameLeft: scaled ? 0 : -x,
+      frameTop: scaled ? 0 : -y,
+      frameScale: 1,
+      canvasLeft: scaled ? 0 : x,
+      canvasTop: scaled ? 0 : y,
+      cssWidth,
+      cssHeight,
+    };
+  }
+  return {
+    cssScale,
+    frameLeft: scaled ? -x * cssScale : -x,
+    frameTop: scaled ? -y * cssScale : -y,
+    frameScale: scaled ? cssScale : 1,
+    canvasLeft: 0,
+    canvasTop: 0,
+    cssWidth,
+    cssHeight,
+  };
+}

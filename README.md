@@ -12,7 +12,7 @@ The macOS desktop companion stays visible over other apps, as shown here over Go
 
 A spider desktop companion that walks, watches, and dashes across your screen. Built with **Tauri 2 + Three.js**, its body, eight legs, eyes, and fine hairs are generated in code, with no external models required.
 
-The desktop companion currently targets **macOS 12 and later**. The current build has been verified on an Apple Silicon Mac; desktop support on Intel Macs, Windows, and Linux has not been verified. The project also includes a standalone browser version.
+The desktop companion currently supports **macOS 12+** and **Windows 10 (22H2+) / Windows 11 (x64)**. macOS builds have been verified on Apple Silicon Macs and Windows builds have been verified on Windows x64; Intel Macs, Windows ARM64, and Linux desktop support have not yet been verified. The project also includes a standalone browser version.
 
 ## Features
 
@@ -42,9 +42,9 @@ On launch, the spider appears on your screen, accompanied by a small eyes icon i
 
 | Action | Result |
 | --- | --- |
-| Choose a mode from the menu bar or panel | Autonomous patrol, follow the pointer, or observe in place |
-| ⌘ Command + click | Temporarily dash toward the destination at up to 3× speed; click again to change the destination |
-| Turn off Allow Cross-Display Movement | Stay on the spider’s current display and ignore Command-clicks on other displays |
+| Choose a mode from the menu bar / system tray or panel | Autonomous patrol, follow the pointer, or observe in place |
+| macOS `⌘ Command + click` / Windows `Ctrl + click` | Temporarily dash toward the destination at up to 3× speed; click again to change the destination |
+| Turn off Allow Cross-Display Movement | Stay on the spider’s current display and ignore dash-clicks on other displays |
 | Pause / hide | Stop continuous rendering and ignore movement commands |
 | Press Space in the control panel | Pause / resume |
 
@@ -57,13 +57,13 @@ Speed ranges from **0.35× to 3.00×**, with a default of **1.25×**. Size range
 - Display positions follow the arrangement in macOS System Settings → Displays. Displays must share an edge for crossing; mirrored displays are treated as one area.
 - Coordinates use macOS logical points. The layout updates when displays are connected, disconnected, or rearranged. If the current display is removed, the spider is recovered onto a visible display.
 - Disabling cross-display movement cancels the existing route and restricts the spider to its current display. Re-enabling it restores crossing.
-- Destinations avoid the menu bar and Dock and leave room for the body at screen edges. An edge click does not guarantee that the body’s center lands exactly under the pointer.
-- Coverage is not guaranteed on the lock screen or system-protected interfaces. Fullscreen and multi-display behavior may vary with the macOS version and display configuration.
-- The current build uses an ad hoc signature and is not notarized by Apple. Other Macs may show a security prompt.
+- Destinations avoid the menu bar, Dock, or Windows taskbar and leave room for the body at screen edges; cross-display seam transitions may briefly cross a taskbar/menu bar located along the shared edge. An edge click does not guarantee that the body’s center lands exactly under the pointer.
+- Coverage is not guaranteed on the lock screen, UAC prompts, or system-protected interfaces. On Windows, exclusive fullscreen games or other topmost windows placed later may cover the companion, and UIPI prevents standard-privilege builds from receiving `Ctrl + click` events over elevated (administrator) windows.
+- Builds are not Apple-notarized or Authenticode-signed; other machines may show a security prompt.
 
 ### Mouse Events and Privacy
 
-On macOS, a global mouse event monitor detects Command-clicks in other applications. It handles only left-button presses, releases, and drags, along with the Command modifier carried by those mouse events. It does not monitor keyboard input in other applications or consume mouse events. The current code includes no telemetry, account login, or data upload functionality.
+The desktop companion uses passive global mouse monitoring to detect dash-clicks in other applications (`Command + click` on macOS; a low-level mouse hook for `Ctrl + click` on Windows). It handles only left-button presses, releases, drag-threshold cancellation, and the corresponding modifier state. It does not log keyboard input in other applications or consume mouse events. The current code includes no telemetry, account login, or data upload functionality.
 
 ## Running from Source
 
@@ -107,6 +107,29 @@ src-tauri/target/release/bundle/macos/Araneae.app
 
 With a complete dependency cache, use `CARGO_NET_OFFLINE=true npm run desktop:build`. The current build configuration does not perform Apple notarization, and there is no automatic updater.
 
+### Windows Desktop Companion (x64)
+
+Requires Node.js 18+, Visual Studio C++ Build Tools (MSVC + Windows 10/11 SDK), Rust 1.88+ (`x86_64-pc-windows-msvc`), WebView2 Runtime (preinstalled on Windows 11), and Tauri CLI 2:
+
+```powershell
+cargo install tauri-cli --version '^2' --locked
+npm run desktop:dev
+```
+
+Build the Windows NSIS installer:
+
+```powershell
+npm run desktop:build:win
+```
+
+The installer is generated at:
+
+```text
+src-tauri/target/release/bundle/nsis/
+```
+
+The installer uses Tauri’s `downloadBootstrapper` mode, which requires internet access on machines that do not already have WebView2 Runtime installed. Builds are unsigned and have no automatic updater.
+
 ## Development and Checks
 
 | Path | Responsibility |
@@ -148,7 +171,7 @@ npm run desktop:test
 
 Simulation checks cover gait, momentum, anchored recovery, patrol, dashing, and desktop routing rules. They do not replace visual, fullscreen, or multi-display testing on a real Mac.
 
-The **Windows CI** workflow runs JavaScript syntax checks, Rust formatting, scoped desktop routing/clock/cropping tests, and native compilation and tests on `windows-latest`. The included `src-tauri/icons/icon.ico` is required by Tauri's Windows resource compiler. This workflow does not provide Windows desktop functionality, build installers, or publish releases. The full desktop motion simulation is not included: it currently fails on the unchanged baseline at `manual-horizontal-slow: patrol took over a manual destination`; `npm run desktop:test` retains that check.
+The **Windows CI** workflow runs JavaScript syntax checks, Rust formatting, scoped desktop routing/clock/cropping tests, and native compilation and tests on `windows-latest`. The included `src-tauri/icons/icon.ico` is required by Tauri's Windows resource compiler. This workflow does not build installers or publish releases. The full desktop motion simulation is not included: it currently fails on the unchanged baseline at `manual-horizontal-slow: patrol took over a manual destination`; `npm run desktop:test` retains that check.
 
 Issues and improvements are welcome. Please include your macOS version, Mac chip, display arrangement and scaling, behavior mode, and reproduction steps. Keep the browser and desktop behavior boundaries intact, and avoid unrelated refactoring.
 

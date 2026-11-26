@@ -132,7 +132,10 @@ export class DesktopNavigator {
       const target = clampPoint(this.wholeScreen ? screen.frame : screen.workArea, pointer, 110 * size);
       if (!this.target || nearestScreen(this.screens, target) !== nearestScreen(this.screens, this.target)
         || distance(target, this.target) > 70 || this.points.length <= 1) {
-        if (!this.navigate(position, target)) return clampPoint(this.screens[nearestScreen(this.screens, position)].frame, target, 110 * size);
+        if (!this.navigate(position, target)) {
+          const fallback = this.screens[nearestScreen(this.screens, position)];
+          return clampPoint(this.wholeScreen ? fallback.frame : fallback.workArea, target, 110 * size);
+        }
       }
     }
     while (this.points.length && distance(position, this.points[0]) < reach) this.points.shift();

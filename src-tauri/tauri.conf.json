@@ -39,7 +39,7 @@
   "bundle": {
     "active": true,
     "targets": ["app"],
-    "icon": ["icons/icon.png", "icons/icon.icns"],
+    "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"],
     "category": "Entertainment",
     "shortDescription": "Araneae — 在屏幕上自由探索的桌面伙伴",
     "macOS": {

@@ -56,7 +56,7 @@ fn update(app: &tauri::AppHandle, command: Command) -> DesktopResult<Settings> {
     let window = pet(app)?;
     if previous.visible != next.visible {
         if next.visible {
-            window.show().map_err(|e| e.to_string())?;
+            show_pet_window(&window)?;
         } else {
             window.hide().map_err(|e| e.to_string())?;
         }
@@ -65,6 +65,10 @@ fn update(app: &tauri::AppHandle, command: Command) -> DesktopResult<Settings> {
         .0
         .lock()
         .map_err(|e| e.to_string())? = next.clone();
+    let base_scale = cached_layout(app)
+        .map(|layout| layout.base_scale)
+        .unwrap_or(1.0);
+    interaction::sync_settings(&next, base_scale);
     app.emit_to("pet", "pet-settings", &next)
         .map_err(|e| e.to_string())?;
     app.emit_to("controls", "pet-settings", &next)
@@ -88,13 +92,20 @@ fn update_settings(
     update(&app, command)
 }
 
+fn show_pet_window(window: &WebviewWindow) -> DesktopResult<()> {
+    window.show().map_err(|e| e.to_string())?;
+    #[cfg(target_os = "windows")]
+    ensure_windows_overlay_style(window).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 fn pet_ready(window: WebviewWindow, app: tauri::AppHandle, renderer: String) -> DesktopResult<()> {
     if window.label() != "pet" {
         return Err("Only the pet window can report readiness".into());
     }
     if settings(&app)?.visible {
-        window.show().map_err(|e| e.to_string())?;
+        show_pet_window(&window)?;
     }
     eprintln!("Desktop pet ready ({renderer}): {:?}", window.inner_size());
     Ok(())
@@ -103,7 +114,7 @@ fn pet_ready(window: WebviewWindow, app: tauri::AppHandle, renderer: String) -> 
 #[tauri::command]
 fn cursor_position(window: WebviewWindow, app: tauri::AppHandle) -> DesktopResult<desktop::Point> {
     authorize_pet(&window)?;
-    desktop::cursor(cached_layout(&app)?.primary_top)
+    desktop::cursor(&cached_layout(&app)?)
 }
 
 fn authorize_pet(window: &WebviewWindow) -> DesktopResult<()> {
@@ -162,6 +173,9 @@ fn start_frame_clock(app: tauri::AppHandle) {
 fn desktop_layout(window: WebviewWindow, app: tauri::AppHandle) -> DesktopResult<desktop::Layout> {
     authorize_pet(&window)?;
     let layout = desktop::layout(&window)?;
+    if let Ok(current_settings) = settings(&app) {
+        interaction::sync_settings(&current_settings, layout.base_scale);
+    }
     app.state::<ScreenState>()
         .0
         .lock()
@@ -202,7 +216,7 @@ fn place_viewport(
         return Err("Pet coordinates must be finite".into());
     }
     let layout = cached_layout(&app)?;
-    let actual = desktop::place(&window, bounds, layout.primary_top)?;
+    let actual = desktop::place(&window, bounds, &layout)?;
     let screen = layout
         .screens
         .iter()
@@ -224,7 +238,10 @@ fn place_viewport(
     Ok(actual)
 }
 
+static OPEN_WINDOW_LOCK: Mutex<()> = Mutex::new(());
+
 fn open_window(app: &tauri::AppHandle, original: bool) -> DesktopResult<()> {
+    let _guard = OPEN_WINDOW_LOCK.lock().map_err(|e| e.to_string())?;
     let language = settings(app)?.language;
     let (label, title, url, width, height) = if original {
         (
@@ -256,6 +273,9 @@ fn open_window(app: &tauri::AppHandle, original: bool) -> DesktopResult<()> {
             .build()
             .map_err(|e| e.to_string())?,
     };
+    if window.is_minimized().unwrap_or(false) {
+        window.unminimize().map_err(|e| e.to_string())?;
+    }
     window.show().map_err(|e| e.to_string())?;
     if !original {
         desktop::set_level(&window, None)?;
@@ -263,10 +283,56 @@ fn open_window(app: &tauri::AppHandle, original: bool) -> DesktopResult<()> {
     window.set_focus().map_err(|e| e.to_string())
 }
 
+fn handle_tray_open_with<F, E>(
+    original: bool,
+    report_error: Option<String>,
+    mut open: F,
+    mut emit: E,
+) where
+    F: FnMut(bool) -> DesktopResult<()>,
+    E: FnMut(&str),
+{
+    let pending_error = match report_error {
+        Some(error) => Some(error),
+        None => match open(original) {
+            Ok(()) => None,
+            Err(error) => {
+                eprintln!("Desktop menu action failed: {error}");
+                Some(error)
+            }
+        },
+    };
+    if let Some(error) = pending_error {
+        if let Err(open_error) = open(false) {
+            eprintln!("Could not open desktop controls: {open_error}");
+        }
+        emit(&error);
+    }
+}
+
+fn spawn_open_window(app: tauri::AppHandle, original: bool, report_error: Option<String>) {
+    // Tauri 2 warns that building a WebView2 window synchronously inside a tray event
+    // callback or sync command can deadlock the Windows event loop; run it off-thread.
+    std::thread::spawn(move || {
+        handle_tray_open_with(
+            original,
+            report_error,
+            |open_original| open_window(&app, open_original),
+            |error| {
+                if let Err(emit_error) = app.emit_to("controls", "desktop-error", error) {
+                    eprintln!("Could not report desktop error: {emit_error}");
+                }
+            },
+        );
+    });
+}
+
 #[tauri::command]
-fn open_original(window: WebviewWindow, app: tauri::AppHandle) -> DesktopResult<()> {
+async fn open_original(window: WebviewWindow, app: tauri::AppHandle) -> DesktopResult<()> {
     authorize(&window)?;
-    open_window(&app, true)
+    tauri::async_runtime::spawn_blocking(move || open_window(&app, true))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -276,7 +342,7 @@ fn move_to_cursor_screen(window: WebviewWindow, app: tauri::AppHandle) -> Deskto
 }
 
 fn relocate(app: &tauri::AppHandle) -> DesktopResult<()> {
-    let point = desktop::cursor(cached_layout(app)?.primary_top)?;
+    let point = desktop::cursor(&cached_layout(app)?)?;
     update(app, Command::Mode(Mode::Roam))?;
     app.emit_to("pet", "pet-relocate", point)
         .map_err(|e| e.to_string())
@@ -284,7 +350,7 @@ fn relocate(app: &tauri::AppHandle) -> DesktopResult<()> {
 
 fn menu_action(app: &tauri::AppHandle, id: &str) -> DesktopResult<()> {
     match id {
-        "controls" => open_window(app, false)?,
+        "controls" => spawn_open_window(app.clone(), false, None),
         "roam" => {
             update(app, Command::Mode(Mode::Roam))?;
         }
@@ -320,26 +386,24 @@ fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             &item("quit", language.text("Quit Araneae", "退出 Araneae"))?,
         ],
     )?;
+    #[cfg(target_os = "windows")]
+    let tray_bytes: &[u8] = include_bytes!("../icons/tray-win.rgba");
+    #[cfg(not(target_os = "windows"))]
+    let tray_bytes: &[u8] = include_bytes!("../icons/tray.rgba");
+
+    let builder =
+        TrayIconBuilder::with_id("spider").icon(tauri::image::Image::new(tray_bytes, 44, 44));
     // macOS recolors the template image to match the menu bar appearance.
-    TrayIconBuilder::with_id("spider")
-        .icon(tauri::image::Image::new(
-            include_bytes!("../icons/tray.rgba"),
-            44,
-            44,
-        ))
-        .icon_as_template(true)
+    #[cfg(target_os = "macos")]
+    let builder = builder.icon_as_template(true);
+    builder
         .tooltip(language.text("Araneae · Control Panel", "Araneae · 控制面板"))
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| {
             if let Err(error) = menu_action(app, event.id.as_ref()) {
                 eprintln!("Desktop menu action failed: {error}");
-                if let Err(open_error) = open_window(app, false) {
-                    eprintln!("Could not open desktop controls: {open_error}");
-                }
-                if let Err(emit_error) = app.emit_to("controls", "desktop-error", &error) {
-                    eprintln!("Could not report desktop error: {emit_error}");
-                }
+                spawn_open_window(app.clone(), false, Some(error));
             }
         })
         .build(app)?;
@@ -363,6 +427,124 @@ fn configure_macos(window: &WebviewWindow) -> tauri::Result<()> {
     native.setCollectionBehavior(behavior);
     native.setLevel(NSStatusWindowLevel);
     Ok(())
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn apply_pet_ex_style(current: isize, no_activate: isize, tool_window: isize) -> isize {
+    current | no_activate | tool_window
+}
+
+#[cfg(target_os = "windows")]
+fn ensure_windows_overlay_style(window: &WebviewWindow) -> tauri::Result<()> {
+    use windows_sys::Win32::{
+        Foundation::HWND,
+        UI::WindowsAndMessaging::{
+            GetWindowLongPtrW, SetWindowLongPtrW, SetWindowPos, GWL_EXSTYLE, HWND_TOPMOST,
+            SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, WS_EX_NOACTIVATE,
+            WS_EX_TOOLWINDOW,
+        },
+    };
+    let hwnd = window.hwnd()?.0 as HWND;
+    let current = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
+    let updated = apply_pet_ex_style(
+        current,
+        WS_EX_NOACTIVATE as isize,
+        WS_EX_TOOLWINDOW as isize,
+    );
+    if updated != current {
+        unsafe { SetWindowLongPtrW(hwnd, GWL_EXSTYLE, updated) };
+    }
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            HWND_TOPMOST,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        );
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn configure_windows(window: &WebviewWindow) -> tauri::Result<()> {
+    use std::mem::size_of;
+    use windows_sys::Win32::{
+        Foundation::{HWND, S_OK},
+        Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND},
+    };
+    ensure_windows_overlay_style(window)?;
+    let hwnd = window.hwnd()?.0 as HWND;
+    // Windows 11 Build 22000+ supports disabling rounded corners; gracefully ignore on Windows 10.
+    let corner_pref = DWMWCP_DONOTROUND;
+    let hr = unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+            (&corner_pref as *const i32).cast(),
+            size_of::<i32>() as u32,
+        )
+    };
+    if hr != S_OK {
+        eprintln!("DWMWA_WINDOW_CORNER_PREFERENCE unsupported or ignored (HRESULT={hr:#x})");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apply_pet_ex_style, handle_tray_open_with};
+
+    #[test]
+    fn pet_ex_style_preserves_existing_bits_and_sets_overlay_flags() {
+        const LAYERED: isize = 0x0008_0000;
+        const TRANSPARENT: isize = 0x0000_0020;
+        const NO_ACTIVATE: isize = 0x0800_0000;
+        const TOOL_WINDOW: isize = 0x0000_0080;
+        let combined = apply_pet_ex_style(LAYERED | TRANSPARENT, NO_ACTIVATE, TOOL_WINDOW);
+        assert_eq!(combined, LAYERED | TRANSPARENT | NO_ACTIVATE | TOOL_WINDOW);
+    }
+
+    #[test]
+    fn tray_open_retries_and_emits_error_when_open_or_fallback_fails() {
+        // Direct controls click fails once after show, then retry succeeds and error is delivered.
+        let mut attempts = 0usize;
+        let mut emitted = Vec::new();
+        handle_tray_open_with(
+            false,
+            None,
+            |original| {
+                assert!(!original);
+                attempts += 1;
+                if attempts == 1 {
+                    Err("post-show-error".into())
+                } else {
+                    Ok(())
+                }
+            },
+            |err| emitted.push(err.to_string()),
+        );
+        assert_eq!(attempts, 2);
+        assert_eq!(emitted, vec!["post-show-error"]);
+
+        // Other tray action fails and fallback open fails too; original error is still emitted.
+        let mut fallback_attempts = 0usize;
+        let mut fallback_emitted = Vec::new();
+        handle_tray_open_with(
+            false,
+            Some("action-failed".into()),
+            |original| {
+                assert!(!original);
+                fallback_attempts += 1;
+                Err("level-failed".into())
+            },
+            |err| fallback_emitted.push(err.to_string()),
+        );
+        assert_eq!(fallback_attempts, 1);
+        assert_eq!(fallback_emitted, vec!["action-failed"]);
+    }
 }
 
 fn main() {
@@ -395,6 +577,8 @@ fn main() {
             window.set_ignore_cursor_events(true)?;
             #[cfg(target_os = "macos")]
             configure_macos(&window)?;
+            #[cfg(target_os = "windows")]
+            configure_windows(&window)?;
             let layout = desktop::layout(&window)?;
             eprintln!("Desktop layout: {:?}", layout.screens);
             app.state::<ScreenState>()

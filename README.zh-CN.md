@@ -12,7 +12,7 @@ macOS 桌宠可以悬浮在其他应用上方，下面是它在 Google 翻译页
 
 一个在屏幕上散步、观察和冲刺的蜘蛛桌宠。使用 **Tauri 2 + Three.js**，身体、八条腿、眼睛和细毛由代码生成，无需外部模型。
 
-桌宠目前面向 **macOS 12 及以上版本**，当前构建在 Apple Silicon Mac 上验证过；Intel Mac、Windows 和 Linux 桌宠尚未验证。项目同时保留可在浏览器中独立运行的网页版。
+桌宠目前支持 **macOS 12 及以上版本**与 **Windows 10（22H2+）/ Windows 11（x64）**；macOS 当前构建在 Apple Silicon Mac 上验证过，Windows 已验证双屏与透明悬浮，Intel Mac、Windows ARM64 和 Linux 桌宠尚未验证。项目同时保留可在浏览器中独立运行的网页版。
 
 ## 特点
 
@@ -42,9 +42,9 @@ macOS 桌宠可以悬浮在其他应用上方，下面是它在 Google 翻译页
 
 | 操作 | 效果 |
 | --- | --- |
-| 菜单栏或面板选择行为模式 | 自主巡逻、跟随鼠标或原地观察 |
-| ⌘ Command + 单击 | 临时以最高 3× 速度冲刺前往；再次点击可改换目的地 |
-| 关闭「允许跨屏」 | 留在蜘蛛当前所在屏幕，忽略其他屏幕的 Command + 单击 |
+| 菜单栏 / 系统托盘或面板选择行为模式 | 自主巡逻、跟随鼠标或原地观察 |
+| macOS `⌘ Command + 单击` / Windows `Ctrl + 单击` | 临时以最高 3× 速度冲刺前往；再次点击可改换目的地 |
+| 关闭「允许跨屏」 | 留在蜘蛛当前所在屏幕，忽略其他屏幕的冲刺点击 |
 | 暂停 / 隐藏 | 停止持续绘制，并忽略移动指令 |
 | 在控制面板内按空格 | 暂停 / 继续 |
 
@@ -57,13 +57,13 @@ macOS 桌宠可以悬浮在其他应用上方，下面是它在 Google 翻译页
 - 显示器位置遵循 macOS「系统设置 → 显示器 → 排列」。跨屏需要屏幕边缘相接；镜像屏幕视为同一个区域。
 - 使用 macOS 逻辑点统一坐标。显示器拔插或排列变化后自动更新；当前屏幕被移除时，蜘蛛会恢复到可见屏幕上。
 - 关闭跨屏时会取消原路线，并限定在当前屏幕；重新开启后恢复跨屏能力。
-- 目的地避开菜单栏和 Dock，并在屏幕边缘保留身体空间；边缘点击不保证身体中心精确落在指针位置。
-- 锁屏和系统保护界面不保证覆盖。全屏及多屏表现仍可能受系统版本和显示器配置影响。
-- 当前构建使用本地临时签名，未进行 Apple 公证，其他 Mac 可能遇到系统安全提示。
+- 目的地避开菜单栏、Dock 或 Windows 任务栏，并在屏幕边缘保留身体空间；跨屏过渡段允许短暂穿过接缝处的任务栏/菜单栏；边缘点击不保证身体中心精确落在指针位置。
+- 锁屏、UAC 提权界面和系统保护界面不保证覆盖；Windows 独占全屏游戏（Exclusive Fullscreen）或其他后置顶的 `Topmost` 窗口可能覆盖桌宠；受 Windows UIPI 限制，普通权限下不接收管理员权限前台窗口上的 `Ctrl + 单击`。
+- 当前构建使用本地临时签名，未进行 Apple 公证或 Windows 代码签名，其他设备可能遇到系统安全提示。
 
 ### 鼠标事件与隐私
 
-macOS 桌宠通过全局鼠标事件监听器识别其他应用中的 Command + 单击，仅处理左键按下、抬起和拖动，以及这些鼠标事件携带的 Command 状态；不监听其他应用的键盘输入，不吞掉鼠标事件。当前代码没有加入遥测、账号登录或数据上传功能。
+桌宠通过全局被动鼠标监听识别其他应用中的冲刺点击（macOS 为 `Command + 单击`，Windows 为低级鼠标钩子识别 `Ctrl + 单击`），仅处理左键按下、抬起、拖拽越界判断以及对应修饰键状态；不监听其他应用的键盘输入，不吞掉鼠标事件。当前代码没有加入遥测、账号登录或数据上传功能。
 
 ## 从源码运行
 
@@ -107,6 +107,29 @@ src-tauri/target/release/bundle/macos/Araneae.app
 
 缓存完整时可使用 `CARGO_NET_OFFLINE=true npm run desktop:build`。当前构建配置不执行 Apple 公证，也没有自动更新功能。
 
+### Windows 桌宠（x64）
+
+需要 Node.js 18+、Visual Studio C++ Build Tools（MSVC + Windows 10/11 SDK）、Rust 1.88+（`x86_64-pc-windows-msvc`，当前构建验证于 Rust 1.100.0）、WebView2 Runtime（Windows 11 默认自带）和 Tauri CLI 2：
+
+```powershell
+cargo install tauri-cli --version '^2' --locked
+npm run desktop:dev
+```
+
+生成 Windows NSIS 安装包：
+
+```powershell
+npm run desktop:build:win
+```
+
+产物位置：
+
+```text
+src-tauri/target/release/bundle/nsis/
+```
+
+默认安装包采用 Tauri `downloadBootstrapper` 模式：若目标机器缺少 WebView2 Runtime，首次安装时需要联网下载运行时。当前构建不包含代码签名与自动更新。
+
 ## 开发与检查
 
 | 路径 | 职责 |
@@ -148,7 +171,7 @@ npm run desktop:test
 
 模拟检查覆盖步态、惯性、锚定回正、巡逻、冲刺及桌面导航等规则，不能替代实际 Mac 上的视觉、全屏及多屏测试。
 
-**Windows CI** 工作流在 `windows-latest` 上执行 JavaScript 语法、Rust 格式、桌面导航／时钟／裁剪专项测试，以及原生编译检查和测试。附带的 `src-tauri/icons/icon.ico` 是 Tauri 在 Windows 编译资源所必需的图标。该工作流不提供 Windows 桌宠功能、不构建安装包，也不发布 Release。完整桌面运动模拟暂未纳入：未修改的基线代码会在 `manual-horizontal-slow: patrol took over a manual destination` 处失败；`npm run desktop:test` 仍保留该检查。
+**Windows CI** 工作流在 `windows-latest` 上执行 JavaScript 语法、Rust 格式、桌面导航／时钟／裁剪专项测试，以及原生编译检查和测试。附带的 `src-tauri/icons/icon.ico` 是 Tauri 在 Windows 编译资源所必需的图标。该工作流不构建安装包，也不发布 Release。完整桌面运动模拟暂未纳入：未修改的基线代码会在 `manual-horizontal-slow: patrol took over a manual destination` 处失败；`npm run desktop:test` 仍保留该检查。
 
 欢迎提交问题与改进。反馈请附 macOS 版本、Mac 芯片、显示器排列与缩放、行为模式及复现步骤；修改时尽量保持网页版与桌宠入口的行为边界，并避免无关重构。
 

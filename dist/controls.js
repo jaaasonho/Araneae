@@ -15,8 +15,8 @@ function report(error) {
 }
 
 function render(next) {
-  if (!settings || settings.language !== next.language) {
-    strings = localizeDesktop(document, next.language);
+  if (!settings || settings.language !== next.language || settings.platform !== next.platform) {
+    strings = localizeDesktop(document, next.language, next.platform);
   }
   settings = next;
   document.body.classList.toggle('dark', settings.dark);

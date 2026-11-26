@@ -9,9 +9,30 @@ pub enum Mode {
     Observe,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Platform {
+    Macos,
+    Windows,
+    Other,
+}
+
+impl Platform {
+    pub fn current() -> Self {
+        if cfg!(target_os = "macos") {
+            Self::Macos
+        } else if cfg!(target_os = "windows") {
+            Self::Windows
+        } else {
+            Self::Other
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
+    pub platform: Platform,
     pub language: Language,
     pub mode: Mode,
     pub speed: f64,
@@ -27,6 +48,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            platform: Platform::current(),
             language: Language::system(),
             mode: Mode::Roam,
             speed: 1.25,

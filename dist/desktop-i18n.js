@@ -1,4 +1,10 @@
-// Native settings provide one language for the menu, windows and web content.
+// Native settings provide one language and platform for the menu, windows and web content.
+export function detectPlatform(userAgent = globalThis.navigator?.userAgent ?? '') {
+  if (/windows/i.test(userAgent)) return 'windows';
+  if (/macintosh|mac os x/i.test(userAgent)) return 'macos';
+  return 'other';
+}
+
 export const desktopMessages = {
   en: {
     controlTitle: 'Araneae · Control Panel',
@@ -56,12 +62,30 @@ export const desktopMessages = {
   },
 };
 
-export function desktopStrings(language = 'en') {
-  return desktopMessages[language] ?? desktopMessages.en;
+const platformOverrides = {
+  windows: {
+    en: {
+      command: 'Ctrl + click',
+      readyStatus: 'Ctrl-click to dash. Your mouse continues to work in other apps.',
+      petFailed: 'The companion encountered a problem. Quit Araneae from the eyes icon in the system tray, then reopen it. ',
+    },
+    'zh-CN': {
+      command: 'Ctrl + 单击',
+      readyStatus: 'Ctrl + 单击冲刺前往，鼠标可正常操作其他应用。',
+      petFailed: '桌宠运行遇到问题。请从系统托盘的 Araneae 小眼睛图标退出后重新打开。',
+    },
+  },
+};
+
+export function desktopStrings(language = 'en', platform = detectPlatform()) {
+  const key = desktopMessages[language] ? language : 'en';
+  const base = desktopMessages[key];
+  const overrides = platformOverrides[platform]?.[key];
+  return overrides ? {...base, ...overrides} : base;
 }
 
-export function localizeDesktop(document, language) {
-  const strings = desktopStrings(language);
+export function localizeDesktop(document, language, platform = detectPlatform()) {
+  const strings = desktopStrings(language, platform);
   document.documentElement.lang = language === 'zh-CN' ? 'zh-CN' : 'en';
   document.querySelectorAll('[data-i18n]').forEach(element => {
     element.textContent = strings[element.dataset.i18n];

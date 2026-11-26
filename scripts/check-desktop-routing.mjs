@@ -80,3 +80,28 @@ test('cropping preserves global pixel positions and restores the simulation came
   camera.clearViewOffset();
   assert.deepEqual(camera.projectionMatrix.toArray(), original);
 });
+
+test('unreachable follow fallback respects wholeScreen and stays out of the taskbar', () => {
+  const primary = {
+    frame: {x: 0, y: 0, width: 1920, height: 1080},
+    workArea: {x: 0, y: 0, width: 1840, height: 1080}, // 80px right taskbar
+    scale: 1,
+  };
+  const cornerTouching = {
+    frame: {x: 1920, y: 1080, width: 1920, height: 1080},
+    workArea: {x: 1920, y: 1080, width: 1920, height: 1040},
+    scale: 1,
+  };
+  const screens = [primary, cornerTouching];
+  assert.equal(routeBetween(screens, {x: 800, y: 700}, {x: 2200, y: 1200}), null);
+
+  const workOnly = new DesktopNavigator(screens, false);
+  const safeFallback = workOnly.step({x: 800, y: 700}, 'follow', {x: 2200, y: 1200}, 0.5);
+  assert(contains(primary.workArea, safeFallback), `Expected fallback inside workArea, got ${JSON.stringify(safeFallback)}`);
+  assert(safeFallback.x <= primary.workArea.x + primary.workArea.width - 55);
+
+  const fullFrame = new DesktopNavigator(screens, true);
+  const fullFallback = fullFrame.step({x: 800, y: 700}, 'follow', {x: 2200, y: 1200}, 0.5);
+  assert(contains(primary.frame, fullFallback));
+  assert(fullFallback.x > primary.workArea.x + primary.workArea.width);
+});

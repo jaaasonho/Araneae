@@ -1,7 +1,7 @@
 import * as THREE from './assets/three.module.js';
 import {applySettings} from './desktop-adapter.js';
 import {createDesktopClock} from './desktop-clock.js';
-import {createContentBounds, chooseViewport} from './desktop-viewport.js';
+import {createContentBounds, chooseViewport, computeViewportPlacement} from './desktop-viewport.js';
 import {DesktopBehavior} from './desktop-behavior.js';
 import {desktopStrings, localizeDesktop} from './desktop-i18n.js';
 import {desktopBounds, nearestScreen, clampPoint, contains, distance} from './desktop-routing.js';
@@ -11,18 +11,31 @@ const errorBox = document.getElementById('desktopError');
 const {invoke} = window.__TAURI__.core;
 const {listen} = window.__TAURI__.event;
 let settings, page, spider, screens, bounds, behavior, viewport, clock, measureContent;
+let baseScale = 1;
 let stopped = false, placing = false, readingCursor = false, readingLayout = false;
 let resetCrop = true, styledViewport = null;
 let lastPlaced = null, topology = '';
+let cursorFailures = 0, cursorErrorShown = false, activeErrorSource = null;
 const cleanup = [];
 let strings = desktopStrings();
 const raycaster = new THREE.Raycaster();
 const floor = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
-function report(error) {
+function report(error, source = 'general') {
   console.error('Desktop pet operation failed:', error);
+  if (source === 'cursor' && activeErrorSource && activeErrorSource !== 'cursor') return;
   errorBox.textContent = strings.petFailed + String(error);
   errorBox.hidden = false;
+  activeErrorSource = source;
+}
+
+function clearCursorError() {
+  cursorErrorShown = false;
+  if (activeErrorSource === 'cursor') {
+    errorBox.hidden = true;
+    errorBox.textContent = '';
+    activeErrorSource = null;
+  }
 }
 
 function project(world) {
@@ -53,8 +66,8 @@ function recoverPosition(point) {
 }
 
 function apply(next) {
-  if (!settings || settings.language !== next.language) {
-    strings = localizeDesktop(document, next.language);
+  if (!settings || settings.language !== next.language || settings.platform !== next.platform) {
+    strings = localizeDesktop(document, next.language, next.platform);
     frame.title = strings.petArea;
   }
   const crossingChanged = settings && settings.allowCrossScreen !== next.allowCrossScreen;
@@ -85,8 +98,15 @@ async function readLayout() {
   readingLayout = true;
   try {
     const snapshot = await invoke('desktop_layout');
-    const key = JSON.stringify(snapshot.screens);
-    if (key === topology) return;
+    baseScale = Number.isFinite(snapshot.baseScale) && snapshot.baseScale > 0 ? snapshot.baseScale : 1;
+    const dpr = frame.contentWindow?.devicePixelRatio || 1;
+    const key = JSON.stringify({screens: snapshot.screens, baseScale});
+    if (key === topology) {
+      if (spider && settings?.visible && styledViewport && styledViewport.dpr !== dpr && clock) {
+        clock.redraw();
+      }
+      return;
+    }
     const previousPoint = spider ? globalPoint() : null;
     topology = key;
     // Mirrored displays share the same desktop coordinates and must not become duplicate destinations.
@@ -122,9 +142,17 @@ async function readCursor() {
   try {
     const point = await invoke('cursor_position');
     if (behavior) behavior.pointer = point;
+    cursorFailures = 0;
+    clearCursorError();
   } catch (error) {
-    report(error);
-    clearInterval(cursorTimer);
+    // Transient Windows failures (e.g. UAC / lock screen / monitor hot-plug)
+    // must not permanently stop pointer polling.
+    cursorFailures++;
+    console.warn('Cursor position poll failed:', error);
+    if (cursorFailures >= 10 && !cursorErrorShown) {
+      report(error, 'cursor');
+      cursorErrorShown = true;
+    }
   } finally {
     readingCursor = false;
   }
@@ -147,29 +175,50 @@ function track(point) {
     viewport = {x: Math.round(point.x - width / 2), y: Math.round(point.y - height / 2), width, height};
   }
   resetCrop = false;
-  const x = viewport.x - bounds.x;
-  const y = viewport.y - bounds.y;
-  if (!styledViewport || viewport.x !== styledViewport.x || viewport.y !== styledViewport.y
-    || bounds.x !== styledViewport.desktopX || bounds.y !== styledViewport.desktopY) {
-    frame.style.left = -x + 'px';
-    frame.style.top = -y + 'px';
+  const dpr = frame.contentWindow?.devicePixelRatio || 1;
+  const placement = computeViewportPlacement(
+    viewport, bounds, baseScale, dpr,
+    settings?.platform === 'windows', spider.renderer.isWebGLRenderer,
+  );
+  if (!styledViewport || placement.frameLeft !== styledViewport.frameLeft
+    || placement.frameTop !== styledViewport.frameTop
+    || placement.frameScale !== styledViewport.frameScale
+    || placement.canvasLeft !== styledViewport.canvasLeft
+    || placement.canvasTop !== styledViewport.canvasTop) {
+    frame.style.left = placement.frameLeft + 'px';
+    frame.style.top = placement.frameTop + 'px';
+    frame.style.transformOrigin = '0 0';
+    frame.style.transform = placement.frameScale === 1 ? '' : `scale(${placement.frameScale})`;
     if (spider.renderer.isWebGLRenderer) {
       const canvas = spider.renderer.domElement;
       canvas.style.position = 'absolute';
-      canvas.style.left = x + 'px';
-      canvas.style.top = y + 'px';
+      canvas.style.left = placement.canvasLeft + 'px';
+      canvas.style.top = placement.canvasTop + 'px';
     }
-    styledViewport = {...viewport, desktopX: bounds.x, desktopY: bounds.y};
+    styledViewport = {...placement, dpr};
+  } else if (styledViewport.dpr !== dpr) {
+    styledViewport.dpr = dpr;
   }
   if (placing || (lastPlaced && distance(viewport, lastPlaced) < 1
     && viewport.width === lastPlaced.width && viewport.height === lastPlaced.height)) return;
   placing = true;
   const requested = {...viewport};
   invoke('place_viewport', {bounds: requested, center: point}).then(actual => {
-    if (Math.abs(actual.x - requested.x) > 1 || Math.abs(actual.y - requested.y) > 1) {
-      throw new Error('The system constrained the desktop viewport position');
+    const tolerance = settings?.platform === 'windows' ? 2 : 1;
+    const constrained = Math.abs(actual.x - requested.x) > tolerance
+      || Math.abs(actual.y - requested.y) > tolerance
+      || Math.abs(actual.width - requested.width) > tolerance
+      || Math.abs(actual.height - requested.height) > tolerance;
+    if (constrained) {
+      if (settings?.platform === 'windows') {
+        console.warn('Windows desktop viewport constrained or mid-DPI transition:', requested, actual);
+        lastPlaced = actual;
+      } else {
+        throw new Error('The system constrained the desktop viewport position');
+      }
+    } else {
+      lastPlaced = requested;
     }
-    lastPlaced = requested;
   }).catch(report).finally(() => { placing = false; });
 }
 
@@ -180,14 +229,27 @@ function attachRenderer() {
   renderer.render = (scene, camera) => {
     const point = globalPoint();
     track(point);
-    if (!renderer.isWebGLRenderer) return originalRender(scene, camera);
+    const dpr = frame.contentWindow.devicePixelRatio || 1;
+    if (!renderer.isWebGLRenderer) {
+      if (settings?.platform === 'windows') {
+        const targetRatio = Math.min(baseScale, 2);
+        if (renderer.pixelRatio !== targetRatio) renderer.setPixelRatio(targetRatio);
+      }
+      return originalRender(scene, camera);
+    }
     // Crop only the render. Physics, camera projection and all original input handlers
     // keep using the full virtual desktop and the original simulation state.
-    const ratio = Math.min(frame.contentWindow.devicePixelRatio, 2);
+    const ratio = Math.min(dpr, 2);
+    // On Windows mixed-DPI displays, native window size uses shared baseScale while
+    // WebView2 CSS coordinates scale by the current monitor's DPR. Compensate so the
+    // canvas fills the physical HWND without clipping or visual jumping across seams.
+    const {cssWidth, cssHeight} = computeViewportPlacement(
+      viewport, bounds, baseScale, dpr, settings?.platform === 'windows', true,
+    );
     if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio);
     const canvas = renderer.domElement;
-    if (canvas.width !== Math.floor(viewport.width * ratio) || canvas.height !== Math.floor(viewport.height * ratio)) {
-      renderer.setSize(viewport.width, viewport.height);
+    if (canvas.width !== Math.floor(cssWidth * ratio) || canvas.height !== Math.floor(cssHeight * ratio)) {
+      renderer.setSize(cssWidth, cssHeight);
     }
     camera.setViewOffset(bounds.width, bounds.height,
       viewport.x - bounds.x, viewport.y - bounds.y, viewport.width, viewport.height);
@@ -240,6 +302,29 @@ async function waitForOriginal() {
   if (!screens.some(screen => contains(screen.frame, point))) recoverPosition(point);
 }
 
+function watchDevicePixelRatio() {
+  const target = frame.contentWindow;
+  if (!target?.matchMedia) return;
+  let current = target.devicePixelRatio || 1;
+  let media = null;
+  const onChange = () => {
+    media?.removeEventListener('change', onChange);
+    const next = target.devicePixelRatio || 1;
+    if (next !== current) {
+      current = next;
+      if (spider && settings?.visible && clock) clock.redraw();
+    }
+    subscribe();
+  };
+  const subscribe = () => {
+    if (stopped) return;
+    media = target.matchMedia(`(resolution: ${current}dppx)`);
+    media.addEventListener('change', onChange, {once: true});
+  };
+  subscribe();
+  cleanup.push(() => media?.removeEventListener('change', onChange));
+}
+
 function keydown(event) {
   if (event.code === 'Space' && !['INPUT', 'BUTTON'].includes(page.activeElement.tagName)) {
     invoke('update_settings', {command: {type: 'paused', value: spider.state.paused}}).catch(report);
@@ -283,6 +368,7 @@ try {
   attachRenderer();
   // Match the first crop and native position before revealing the window.
   track(globalPoint());
+  watchDevicePixelRatio();
   frame.contentWindow.addEventListener('keydown', keydown);
   frame.classList.add('ready');
   await invoke('pet_ready', {renderer: spider.renderer.isWebGLRenderer ? 'WebGL' : 'Canvas fallback'});
