@@ -1,4 +1,4 @@
-name: Windows build
+name: Windows CI
 
 on:
   workflow_dispatch:
@@ -24,6 +24,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -39,16 +40,7 @@ jobs:
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
       - name: Test desktop coordinates, clock and cropping
         run: node --test scripts/check-desktop-routing.mjs scripts/check-desktop-clock.mjs scripts/check-desktop-viewport.mjs
-      - name: Test native integration and click recognition
+      - name: Check native compilation
+        run: cargo check --manifest-path src-tauri/Cargo.toml --locked
+      - name: Test native geometry and settings
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli --version 2.10.1 --locked
-      - name: Build Windows installer
-        run: npm run desktop:build:windows
-      - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: Araneae-windows-x64
-          path: src-tauri/target/release/bundle/nsis/*-setup.exe
-          if-no-files-found: error
-          retention-days: 14

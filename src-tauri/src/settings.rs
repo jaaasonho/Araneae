@@ -13,7 +13,6 @@ pub enum Mode {
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
     pub language: Language,
-    pub platform: &'static str,
     pub mode: Mode,
     pub speed: f64,
     pub size: f64,
@@ -29,7 +28,6 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             language: Language::system(),
-            platform: std::env::consts::OS,
             mode: Mode::Roam,
             speed: 1.25,
             size: 0.5,

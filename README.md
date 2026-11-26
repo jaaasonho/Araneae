@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-**[Try the browser demo](https://jaaasonho.github.io/Araneae/)** — no installation required. The demo runs inside your browser tab; desktop overlays and cross-display movement require the desktop app.
+**[Try the browser demo](https://jaaasonho.github.io/Araneae/)** — no installation required. The demo runs inside your browser tab; desktop overlays and cross-display movement require the macOS app.
 
 ![Araneae browser demo showing the spider and behavior controls on a light background](docs/images/browser-demo.jpg)
 
@@ -12,7 +12,7 @@ The macOS desktop companion stays visible over other apps, as shown here over Go
 
 A spider desktop companion that walks, watches, and dashes across your screen. Built with **Tauri 2 + Three.js**, its body, eight legs, eyes, and fine hairs are generated in code, with no external models required.
 
-The desktop companion currently targets **macOS 12 and later**. The current build has been verified on an Apple Silicon Mac; desktop support on Intel Macs and Linux has not been verified. **Windows 10/11 x64 support is experimental and awaits testing on a Windows machine.** The project also includes a standalone browser version.
+The desktop companion currently targets **macOS 12 and later**. The current build has been verified on an Apple Silicon Mac; desktop support on Intel Macs, Windows, and Linux has not been verified. The project also includes a standalone browser version.
 
 ## Features
 
@@ -30,7 +30,7 @@ The local **macOS arm64 app bundle is approximately 8.9 MiB** (9,327,831 bytes, 
 
 The animated 3D companion uses CPU, GPU, and memory while active. A small app bundle does not imply negligible runtime cost:
 
-- When checking resource usage, include the main app and its WebKit helper processes on macOS, or its associated `msedgewebview2.exe` processes on Windows. The macOS bundle size above is not a Windows installer size estimate.
+- When checking resource usage, include the main app and its WebKit WebContent, graphics/media, and networking processes.
 - Usage varies with behavior mode, display configuration, scaling, and hardware. Earlier short measurements do not establish a benchmark for the current version; no fixed CPU or memory target is claimed.
 - Pause or hide the companion to stop continuous rendering. This reduces ongoing rendering work but does not quit the app or release all of its memory.
 
@@ -43,8 +43,8 @@ On launch, the spider appears on your screen, accompanied by a small eyes icon i
 | Action | Result |
 | --- | --- |
 | Choose a mode from the menu bar or panel | Autonomous patrol, follow the pointer, or observe in place |
-| ⌘ Command + click on macOS / Ctrl + click on Windows | Temporarily dash toward the destination at up to 3× speed; click again to change the destination |
-| Turn off Allow Cross-Display Movement | Stay on the spider’s current display and ignore manual commands on other displays |
+| ⌘ Command + click | Temporarily dash toward the destination at up to 3× speed; click again to change the destination |
+| Turn off Allow Cross-Display Movement | Stay on the spider’s current display and ignore Command-clicks on other displays |
 | Pause / hide | Stop continuous rendering and ignore movement commands |
 | Press Space in the control panel | Pause / resume |
 
@@ -61,17 +61,9 @@ Speed ranges from **0.35× to 3.00×**, with a default of **1.25×**. Size range
 - Coverage is not guaranteed on the lock screen or system-protected interfaces. Fullscreen and multi-display behavior may vary with the macOS version and display configuration.
 - The current build uses an ad hoc signature and is not notarized by Apple. Other Macs may show a security prompt.
 
-### Windows (Experimental)
-
-Windows uses an eyes icon in the system tray (possibly inside the hidden-icons menu). Open **Control Panel** there. The pet stays out of the taskbar and does not open the panel at startup. **Ctrl + click** sends a dash command; normal clicks pass through. The mode, size, speed, pause, hide, and cross-display settings match macOS.
-
-Display layout follows Windows Settings → System → Display. All monitor and mouse coordinates use a single scale based on the primary monitor to preserve adjacency when displays use different DPI settings. The pet avoids the taskbar work area. Its physical size stays consistent while crossing monitors; this can make its apparent size differ between displays with different pixel densities.
-
-Transparent overlays, mixed-DPI crossing, display hot-plugging, tray clicks, and coverage over borderless fullscreen applications still need Windows hardware testing. Exclusive fullscreen games, UAC secure desktop, lock screens, and other protected surfaces are not supported. Ctrl-click still reaches the underlying app and may trigger its own shortcut.
-
 ### Mouse Events and Privacy
 
-On macOS, a global mouse event monitor detects Command-clicks in other applications. It handles only left-button presses, releases, and drags, along with the Command modifier carried by those mouse events. It does not monitor keyboard input in other applications or consume mouse events. On Windows, a passive low-level mouse hook detects Ctrl-clicks and filters out drags and clicks inside Araneae windows. It checks only the Ctrl modifier during mouse events, installs no keyboard hook, and always passes mouse input onward. The current code includes no telemetry, account login, or data upload functionality.
+On macOS, a global mouse event monitor detects Command-clicks in other applications. It handles only left-button presses, releases, and drags, along with the Command modifier carried by those mouse events. It does not monitor keyboard input in other applications or consume mouse events. The current code includes no telemetry, account login, or data upload functionality.
 
 ## Running from Source
 
@@ -87,7 +79,7 @@ Open **http://127.0.0.1:4173/**. Do not open `dist/index.html` directly: ES Modu
 
 If the port is in use, run `PORT=4174 npm run dev` on macOS / Linux, or `$env:PORT=4174; npm run dev` in PowerShell.
 
-Browser controls differ from the desktop companion: **click to move, double-click to dash, and Space to pause**. The browser version also retains light/dark backgrounds and fullscreen controls. Its interface remains in Simplified Chinese. Cross-display movement, Command-click commands, and automatic interface language selection belong to the desktop companion (Ctrl-click on Windows).
+Browser controls differ from the desktop companion: **click to move, double-click to dash, and Space to pause**. The browser version also retains light/dark backgrounds and fullscreen controls. Its interface remains in Simplified Chinese. Cross-display movement, Command-click commands, and automatic interface language selection belong to the macOS desktop companion.
 
 ### macOS Desktop Companion
 
@@ -114,22 +106,6 @@ src-tauri/target/release/bundle/macos/Araneae.app
 ```
 
 With a complete dependency cache, use `CARGO_NET_OFFLINE=true npm run desktop:build`. The current build configuration does not perform Apple notarization, and there is no automatic updater.
-
-### Windows Desktop Companion (x64)
-
-Build on Windows 10/11 x64 with Node.js 18+, current stable Rust (MSVC toolchain), [Microsoft C++ Build Tools with “Desktop development with C++” and WebView2](https://v2.tauri.app/start/prerequisites/#windows). No frontend dependency installation is required.
-
-```powershell
-cargo install tauri-cli --version 2.10.1 --locked
-npm run desktop:dev
-npm run desktop:build:windows
-```
-
-The installer is written to `src-tauri/target/release/bundle/nsis/*-setup.exe`. It installs for the current user; when WebView2 is missing or outdated, installation needs internet access to download/update it. Subsequent app operation is offline. No Windows code-signing certificate is configured.
-
-The **Windows build** GitHub Actions workflow runs Windows checks and uploads an `Araneae-windows-x64` installer artifact for 14 days. It can be started manually or by pushing this branch / opening a pull request. It does not create a release. The workflow has not been run for these local changes yet; no validated Windows installer is currently provided.
-
-Windows implementation decisions and validation limits: [Windows port notes](docs/windows-support.md).
 
 ## Development and Checks
 
@@ -171,6 +147,8 @@ npm run desktop:test
 ```
 
 Simulation checks cover gait, momentum, anchored recovery, patrol, dashing, and desktop routing rules. They do not replace visual, fullscreen, or multi-display testing on a real Mac.
+
+The **Windows CI** workflow runs JavaScript syntax checks, Rust formatting, scoped desktop routing/clock/cropping tests, and native compilation and tests on `windows-latest`. The included `src-tauri/icons/icon.ico` is required by Tauri's Windows resource compiler. This workflow does not provide Windows desktop functionality, build installers, or publish releases. The full desktop motion simulation is not included: it currently fails on the unchanged baseline at `manual-horizontal-slow: patrol took over a manual destination`; `npm run desktop:test` retains that check.
 
 Issues and improvements are welcome. Please include your macOS version, Mac chip, display arrangement and scaling, behavior mode, and reproduction steps. Keep the browser and desktop behavior boundaries intact, and avoid unrelated refactoring.
 

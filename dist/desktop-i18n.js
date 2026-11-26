@@ -56,21 +56,12 @@ export const desktopMessages = {
   },
 };
 
-export function desktopStrings(language = 'en', platform = 'macos') {
-  const strings = desktopMessages[language] ?? desktopMessages.en;
-  if (platform !== 'windows') return strings;
-  const chinese = language === 'zh-CN';
-  return {...strings,
-    command: chinese ? 'Ctrl + 单击' : 'Ctrl + click',
-    readyStatus: chinese ? 'Ctrl + 单击冲刺前往，鼠标可正常操作其他应用。'
-      : 'Ctrl-click to dash. Your mouse continues to work in other apps.',
-    petFailed: chinese ? '桌宠运行遇到问题。请从系统托盘的 Araneae 小眼睛图标退出后重新打开。'
-      : 'The companion encountered a problem. Quit Araneae from the eyes icon in the system tray, then reopen it. ',
-  };
+export function desktopStrings(language = 'en') {
+  return desktopMessages[language] ?? desktopMessages.en;
 }
 
-export function localizeDesktop(document, language, platform) {
-  const strings = desktopStrings(language, platform);
+export function localizeDesktop(document, language) {
+  const strings = desktopStrings(language);
   document.documentElement.lang = language === 'zh-CN' ? 'zh-CN' : 'en';
   document.querySelectorAll('[data-i18n]').forEach(element => {
     element.textContent = strings[element.dataset.i18n];
