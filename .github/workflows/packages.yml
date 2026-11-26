@@ -1,0 +1,143 @@
+name: Desktop packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src-tauri/**'
+      - 'dist/**'
+      - 'scripts/**'
+      - 'package.json'
+      - '.github/workflows/packages.yml'
+  pull_request:
+    paths:
+      - 'src-tauri/**'
+      - 'dist/**'
+      - 'scripts/**'
+      - 'package.json'
+      - '.github/workflows/packages.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-packages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Package ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macos-arm64
+            runner: macos-15
+            target: aarch64-apple-darwin
+            bundle: dmg
+            bundles: app,dmg
+            arch: arm64
+          - label: macos-x64
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            bundle: dmg
+            bundles: app,dmg
+            arch: x86_64
+          - label: windows-x64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundle: nsis
+            bundles: nsis
+            arch: x86_64
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --target ${{ matrix.target }}
+          rustup default stable
+      - name: Verify package versions
+        id: version
+        run: |
+          node --input-type=module <<'JS'
+          import {readFileSync, appendFileSync} from 'node:fs';
+          const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
+          const config = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+          const cargo = readFileSync('src-tauri/Cargo.toml', 'utf8').match(/^version = "([^"]+)"/m)?.[1];
+          const locked = readFileSync('src-tauri/Cargo.lock', 'utf8').match(/name = "shadow-spider-desktop"\r?\nversion = "([^"]+)"/)?.[1];
+          if (![config.version, cargo, locked].every(value => value === version)) {
+            throw new Error('Package, Tauri, Cargo and lockfile versions must match');
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
+          JS
+      - name: Check JavaScript and Rust formatting
+        run: |
+          npm run check
+          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - name: Test desktop integration
+        run: |
+          node --test scripts/check-desktop-routing.mjs scripts/check-desktop-clock.mjs scripts/check-desktop-viewport.mjs scripts/check-desktop-i18n.mjs
+          cargo test --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }} --locked
+      - name: Install Tauri CLI
+        run: npm install --global @tauri-apps/cli@2.10.1
+      - name: Build installer
+        env:
+          TAURI_BUNDLER_DMG_IGNORE_CI: 'true'
+        run: tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} -- --locked
+      - name: Verify macOS app and disk image
+        if: runner.os == 'macOS'
+        env:
+          PACKAGE_TARGET: ${{ matrix.target }}
+          PACKAGE_ARCH: ${{ matrix.arch }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          app="src-tauri/target/$PACKAGE_TARGET/release/bundle/macos/Araneae.app"
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
+          executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          test "$version" = "$PACKAGE_VERSION"
+          lipo "$app/Contents/MacOS/$executable" -verify_arch "$PACKAGE_ARCH"
+          codesign --verify --deep --strict "$app"
+          hdiutil verify src-tauri/target/"$PACKAGE_TARGET"/release/bundle/dmg/*.dmg
+      - name: Collect installer and checksum
+        env:
+          PACKAGE_TARGET: ${{ matrix.target }}
+          PACKAGE_LABEL: ${{ matrix.label }}
+          PACKAGE_BUNDLE: ${{ matrix.bundle }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node --input-type=module <<'JS'
+          import {readdirSync, readFileSync, copyFileSync, mkdirSync, writeFileSync, appendFileSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import {join} from 'node:path';
+          const {PACKAGE_TARGET: target, PACKAGE_LABEL: label, PACKAGE_BUNDLE: bundle, PACKAGE_VERSION: version} = process.env;
+          const dir = join('src-tauri', 'target', target, 'release', 'bundle', bundle);
+          const suffix = bundle === 'dmg' ? '.dmg' : '-setup.exe';
+          const files = readdirSync(dir).filter(file => file.endsWith(suffix));
+          if (files.length !== 1) throw new Error(`Expected one ${suffix} installer, found ${files.length}`);
+          const bytes = readFileSync(join(dir, files[0]));
+          if (bytes.length === 0) throw new Error('Installer is empty');
+          const name = `Araneae_${version}_${label}${suffix}`;
+          mkdirSync('artifacts', {recursive: true});
+          copyFileSync(join(dir, files[0]), join('artifacts', name));
+          const digest = createHash('sha256').update(bytes).digest('hex');
+          writeFileSync(join('artifacts', 'SHA256SUMS.txt'), `${digest}  ${name}\n`);
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### ${label}\n\n${name} (${bytes.length} bytes)\n\nSHA-256: \`${digest}\`\n`);
+          JS
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: Araneae-${{ steps.version.outputs.version }}-${{ matrix.label }}-${{ github.run_attempt }}
+          path: artifacts/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

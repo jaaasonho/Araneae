@@ -65,6 +65,20 @@ Speed ranges from **0.35× to 3.00×**, with a default of **1.25×**. Size range
 
 The desktop companion uses passive global mouse monitoring to detect dash-clicks in other applications (`Command + click` on macOS; a low-level mouse hook for `Ctrl + click` on Windows). It handles only left-button presses, releases, drag-threshold cancellation, and the corresponding modifier state. It does not log keyboard input in other applications or consume mouse events. The current code includes no telemetry, account login, or data upload functionality.
 
+## Desktop Installers
+
+The **Desktop packages** workflow builds version **0.0.2** for these platforms:
+
+| Computer | Installer |
+| --- | --- |
+| Mac with Apple Silicon (M1 or later) | `Araneae_0.0.2_macos-arm64.dmg` |
+| Intel Mac | `Araneae_0.0.2_macos-x64.dmg` |
+| Windows 10/11 x64 | `Araneae_0.0.2_windows-x64-setup.exe` |
+
+Until a release is published, packages are available from a successful [Desktop packages Actions run](https://github.com/jaaasonho/Araneae/actions/workflows/packages.yml). Sign in to GitHub, download the artifact for your computer, and extract its ZIP. Open the DMG and drag Araneae into Applications on macOS; run the setup EXE on Windows. Each artifact includes `SHA256SUMS.txt` and is retained for 14 days. The workflow also supports **Run workflow** for manual builds; it does not publish releases or move existing tags.
+
+macOS packages use an ad hoc signature and are not Apple-notarized; Windows installers are unsigned. System security prompts may appear. Successful packaging checks do not replace testing on a real desktop, particularly on Intel Macs. The existing `v0.0.1` tag is retained; package, Tauri, and Cargo versions now agree on `0.0.2`.
+
 ## Running from Source
 
 ### Browser Version
@@ -83,11 +97,11 @@ Browser controls differ from the desktop companion: **click to move, double-clic
 
 ### macOS Desktop Companion
 
-Requires Node.js 18+, Rust, Xcode Command Line Tools, and Tauri CLI 2. The current successful build used Rust **1.91.1**. Rust dependency versions are pinned in `src-tauri/Cargo.lock`.
+Requires Node.js 18+, Rust 1.88+, Xcode Command Line Tools, and Tauri CLI 2. The current successful build used Rust **1.91.1**. Rust dependency versions are pinned in `src-tauri/Cargo.lock`.
 
 ```bash
 xcode-select --install
-cargo install tauri-cli --version '^2' --locked
+cargo install tauri-cli --version 2.10.1 --locked
 npm run desktop:dev
 ```
 
@@ -106,6 +120,8 @@ src-tauri/target/release/bundle/macos/Araneae.app
 ```
 
 With a complete dependency cache, use `CARGO_NET_OFFLINE=true npm run desktop:build`. The current build configuration does not perform Apple notarization, and there is no automatic updater.
+
+To build a DMG for the current Mac, run `npm run desktop:build:mac`. It is written to `src-tauri/target/release/bundle/dmg/`.
 
 ### Windows Desktop Companion (x64)
 
