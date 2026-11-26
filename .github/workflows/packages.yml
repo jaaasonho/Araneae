@@ -105,7 +105,7 @@ jobs:
           version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
           executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
           test "$version" = "$PACKAGE_VERSION"
-          lipo -verify_arch "$PACKAGE_ARCH" "$app/Contents/MacOS/$executable"
+          lipo "$app/Contents/MacOS/$executable" -verify_arch "$PACKAGE_ARCH"
           codesign --verify --deep --strict "$app"
           hdiutil verify src-tauri/target/"$PACKAGE_TARGET"/release/bundle/dmg/*.dmg
       - name: Collect installer and checksum
